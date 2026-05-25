@@ -1,0 +1,304 @@
+import { Ionicons } from "@expo/vector-icons";
+import { Link, router } from "expo-router";
+import {
+    EmailAuthProvider,
+    deleteUser,
+    reauthenticateWithCredential,
+} from "firebase/auth";
+import {
+    collection,
+    deleteDoc,
+    doc,
+    getDocs,
+    query,
+    where,
+} from "firebase/firestore";
+import { useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { auth, db } from "../firebaseConfig";
+
+export default function Settings() {
+  const [password, setPassword] = useState("");
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleDeleteAccount = () => {
+    if (!password) {
+      Alert.alert(
+        "Hata",
+        "Hesabınızı silmek için mevcut şifrenizi girmelisiniz.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Hesabı Sil",
+      "Hesabınızı silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve profil verileriniz kalıcı olarak silinir.",
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Evet, Sil",
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const user = auth.currentUser;
+              if (user && user.email) {
+                // 1. Kullanıcıyı güvenlik gereği yeniden doğruluyoruz
+                const credential = EmailAuthProvider.credential(
+                  user.email,
+                  password,
+                );
+                await reauthenticateWithCredential(user, credential);
+
+                // 2. Kullanıcının yayınladığı tüm iş ilanlarını bulup siliyoruz
+                const jobsRef = collection(db, "jobs");
+                const q = query(jobsRef, where("employerId", "==", user.uid));
+                const querySnapshot = await getDocs(q);
+                const deleteJobPromises = querySnapshot.docs.map((jobDoc) =>
+                  deleteDoc(doc(db, "jobs", jobDoc.id)),
+                );
+                await Promise.all(deleteJobPromises);
+
+                // 3. Firestore'dan kullanıcı profil belgesini (doc) siliyoruz
+                await deleteDoc(doc(db, "users", user.uid));
+
+                // 4. Firebase Auth üzerinden kullanıcı hesabını siliyoruz
+                await deleteUser(user);
+
+                Alert.alert("Başarılı", "Hesabınız başarıyla silindi.", [
+                  {
+                    text: "Tamam",
+                    onPress: () => {
+                      if (typeof router.dismissAll === "function") {
+                        router.dismissAll();
+                      }
+                      router.replace("/");
+                    },
+                  },
+                ]);
+              }
+            } catch (error: any) {
+              let errorMessage = "Hesap silinirken bir hata oluştu.";
+              if (
+                error.code === "auth/wrong-password" ||
+                error.code === "auth/invalid-credential"
+              ) {
+                errorMessage = "Mevcut şifreniz yanlış.";
+              }
+              Alert.alert("Hata", errorMessage);
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={styles.background}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Ayarlar</Text>
+
+            <View style={styles.menuContainer}>
+              <Link href="/account-settings" asChild>
+                <TouchableOpacity style={styles.menuButton}>
+                  <Ionicons
+                    name="key-outline"
+                    size={22}
+                    color="#fff"
+                    style={styles.menuIcon}
+                  />
+                  <Text style={styles.menuButtonText}>Şifre Değiştir</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                </TouchableOpacity>
+              </Link>
+            </View>
+
+            <View style={styles.warningContainer}>
+              <Ionicons name="warning-outline" size={48} color="#d9534f" />
+              <Text style={styles.warningTitle}>Tehlikeli Bölge</Text>
+              <Text style={styles.warningText}>
+                Hesabınızı sildiğinizde özgeçmişiniz ve profilinize dair tüm
+                verileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
+              </Text>
+            </View>
+
+            <View style={styles.formContainer}>
+              <Text style={styles.label}>
+                İşlemi onaylamak için şifrenizi girin:
+              </Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={focusedInput === "password" ? "#d9534f" : "#555"}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mevcut Şifreniz"
+                  placeholderTextColor="#aaa"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setFocusedInput("password")}
+                  onBlur={() => setFocusedInput(null)}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ padding: 5 }}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-outline" : "eye-off-outline"}
+                    size={20}
+                    color="#888"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.deleteButton,
+                  loading && styles.buttonDisabled,
+                ]}
+                onPress={handleDeleteAccount}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    Hesabımı Kalıcı Olarak Sil
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  background: { flex: 1, backgroundColor: "#0f2027" },
+  safeArea: { flex: 1 },
+  container: {
+    flexGrow: 1,
+    alignItems: "center",
+    padding: 30,
+    paddingTop: 80,
+    paddingBottom: 50,
+  },
+  backButton: { position: "absolute", top: 40, left: 20, zIndex: 1 },
+  title: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 30,
+    ...Platform.select({
+      web: { textShadow: "-1px 1px 10px rgba(0, 0, 0, 0.75)" },
+      default: {
+        textShadowColor: "rgba(0, 0, 0, 0.75)",
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+      },
+    }),
+  },
+  menuContainer: {
+    width: "100%",
+    maxWidth: 320,
+    marginBottom: 30,
+  },
+  menuButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
+  },
+  menuIcon: { marginRight: 15 },
+  menuButtonText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  warningContainer: {
+    backgroundColor: "rgba(217, 83, 79, 0.15)",
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "rgba(217, 83, 79, 0.5)",
+    alignItems: "center",
+    marginBottom: 30,
+    width: "100%",
+    maxWidth: 320,
+  },
+  warningTitle: {
+    color: "#d9534f",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  warningText: {
+    color: "#fff",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  formContainer: { width: "100%", maxWidth: 320 },
+  label: { color: "#ccc", fontSize: 14, marginBottom: 10, fontWeight: "600" },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 10,
+    marginBottom: 20,
+    paddingHorizontal: 15,
+  },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, paddingVertical: 15, fontSize: 16, color: "#000" },
+  button: {
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  deleteButton: { backgroundColor: "#d9534f" },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+});
