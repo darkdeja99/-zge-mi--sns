@@ -5,7 +5,12 @@ import * as ImagePicker from "expo-image-picker";
 import { router, useNavigation } from "expo-router";
 import { updateProfile } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -238,29 +243,67 @@ export default function EditProfile() {
   ]);
 
   const pickImage = async () => {
-    // No permissions needed for web. For mobile, request permissions.
-    if (Platform.OS !== "web") {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "İzin Gerekli",
-          "Üzgünüz, galerinize erişmek için izne ihtiyacımız var!",
-        );
-        return;
-      }
+    if (Platform.OS === "web") {
+      // Web tarayıcılarında varsayılan olarak galeri (dosya seçici) açılır
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+      return;
     }
 
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
+    const options: any[] = [
+      {
+        text: "Kameradan Çek",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert(
+              "İzin Gerekli",
+              "Kameranıza erişmek için izne ihtiyacımız var!",
+            );
+            return;
+          }
+          let result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+          });
+          if (!result.canceled) {
+            setImageUri(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: "Galeriden Seç",
+        onPress: async () => {
+          let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+          });
+          if (!result.canceled) {
+            setImageUri(result.assets[0].uri);
+          }
+        },
+      },
+    ];
 
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+    if (imageUri) {
+      options.push({
+        text: "Fotoğrafı Kaldır",
+        style: "destructive",
+        onPress: () => setImageUri(null),
+      });
     }
+
+    options.push({ text: "İptal", style: "cancel" });
+
+    Alert.alert("Profil Fotoğrafı", "Lütfen bir seçenek belirleyin:", options);
   };
 
   const handleSave = async () => {
@@ -300,6 +343,15 @@ export default function EditProfile() {
         const storageRef = ref(storage, `profile_pictures/${user.uid}`);
         await uploadBytes(storageRef, blob);
         newPhotoURL = await getDownloadURL(storageRef);
+      } else if (!imageUri && user.photoURL) {
+        // 1.1 Eğer kullanıcı fotoğrafını kaldırdıysa Storage'dan da sil
+        newPhotoURL = null;
+        try {
+          const storageRef = ref(storage, `profile_pictures/${user.uid}`);
+          await deleteObject(storageRef);
+        } catch (e) {
+          console.log("Eski fotoğraf silinemedi veya bulunamadı", e);
+        }
       }
 
       // 2. Update Firebase Auth profile
@@ -399,6 +451,15 @@ export default function EditProfile() {
                 <Ionicons name="camera" size={24} color="white" />
               </View>
             </TouchableOpacity>
+
+            {imageUri && (
+              <TouchableOpacity
+                style={styles.removePhotoButton}
+                onPress={() => setImageUri(null)}
+              >
+                <Text style={styles.removePhotoText}>Fotoğrafı Kaldır</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
@@ -624,6 +685,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#007AFF",
     padding: 8,
     borderRadius: 20,
+  },
+  removePhotoButton: {
+    marginTop: -15,
+    marginBottom: 25,
+  },
+  removePhotoText: {
+    color: "#d9534f",
+    fontSize: 16,
+    fontWeight: "600",
   },
   formContainer: { width: "100%", maxWidth: Math.min(400, width * 0.85) },
   inputContainer: {
