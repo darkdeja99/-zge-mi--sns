@@ -16,6 +16,7 @@ import {
     Alert,
     FlatList,
     Modal,
+    Platform,
     StyleSheet,
     Text,
     TextInput,
@@ -24,6 +25,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
+import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
 interface AdminJobData {
   id: string;
@@ -35,19 +37,6 @@ interface AdminJobData {
   employerId: string;
   createdAt?: any;
 }
-
-const formatTimeAgo = (timestamp: any) => {
-  if (!timestamp) return "";
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return "Az önce";
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} dk önce`;
-  if (diffInSeconds < 86400)
-    return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-  return `${Math.floor(diffInSeconds / 86400)} gün önce`;
-};
 
 export default function ManageJobs() {
   const [jobs, setJobs] = useState<AdminJobData[]>([]);
@@ -106,7 +95,11 @@ export default function ManageJobs() {
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
     if (deleteReason.trim() === "") {
-      Alert.alert("Hata", "Lütfen bir silme nedeni belirtin.");
+      if (Platform.OS === "web") {
+        window.alert("Hata: Lütfen bir silme nedeni belirtin.");
+      } else {
+        Alert.alert("Hata", "Lütfen bir silme nedeni belirtin.");
+      }
       return;
     }
 
@@ -121,16 +114,26 @@ export default function ManageJobs() {
         company: jobData?.company || "Bilinmiyor",
         reason: deleteReason,
         deletedAt: serverTimestamp(),
-        deletedBy: auth.currentUser?.uid || "Bilinmiyor",
+        deletedBy: auth.currentUser?.displayName
+          ? `${auth.currentUser.displayName} (${auth.currentUser.uid})`
+          : auth.currentUser?.uid || "Bilinmiyor",
       });
 
       await deleteDoc(doc(db, "jobs", jobToDelete.id));
-      Alert.alert("Başarılı", "İlan silindi.");
+      if (Platform.OS === "web") {
+        window.alert("Başarılı: İlan silindi.");
+      } else {
+        Alert.alert("Başarılı", "İlan silindi.");
+      }
       setDeleteModalVisible(false);
       setJobToDelete(null);
     } catch (error) {
       console.error("İlan silinirken hata:", error);
-      Alert.alert("Hata", "İlan silinemedi.");
+      if (Platform.OS === "web") {
+        window.alert("Hata: İlan silinemedi.");
+      } else {
+        Alert.alert("Hata", "İlan silinemedi.");
+      }
     }
   };
 

@@ -11,12 +11,14 @@ import {
     query,
     serverTimestamp,
 } from "firebase/firestore";
+import { deleteObject, ref } from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     FlatList,
     Modal,
+    Platform,
     StyleSheet,
     Text,
     TextInput,
@@ -24,7 +26,7 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../../firebaseConfig";
+import { auth, db, storage } from "../../firebaseConfig";
 
 interface AdminUserData {
   id: string;
@@ -87,7 +89,11 @@ export default function ManageUsers() {
 
   const openDeleteModal = (userId: string, userName: string) => {
     if (auth.currentUser?.uid === userId) {
-      Alert.alert("Hata", "Kendi hesabınızı silemezsiniz.");
+      if (Platform.OS === "web") {
+        window.alert("Hata: Kendi hesabınızı silemezsiniz.");
+      } else {
+        Alert.alert("Hata", "Kendi hesabınızı silemezsiniz.");
+      }
       return;
     }
     setUserToDelete({ id: userId, name: userName });
@@ -98,7 +104,11 @@ export default function ManageUsers() {
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
     if (deleteReason.trim() === "") {
-      Alert.alert("Hata", "Lütfen bir silme nedeni belirtin.");
+      if (Platform.OS === "web") {
+        window.alert("Hata: Lütfen bir silme nedeni belirtin.");
+      } else {
+        Alert.alert("Hata", "Lütfen bir silme nedeni belirtin.");
+      }
       return;
     }
 
@@ -113,16 +123,32 @@ export default function ManageUsers() {
         role: userData?.role || "user",
         reason: deleteReason,
         deletedAt: serverTimestamp(),
-        deletedBy: auth.currentUser?.uid || "Bilinmiyor",
+        deletedBy: auth.currentUser?.displayName
+          ? `${auth.currentUser.displayName} (${auth.currentUser.uid})`
+          : auth.currentUser?.uid || "Bilinmiyor",
       });
 
+      // Firebase Storage'dan kullanıcının profil fotoğrafını siliyoruz
+      if (userData?.photoURL) {
+        const photoRef = ref(storage, `profile_pictures/${userToDelete.id}`);
+        await deleteObject(photoRef).catch(() => {});
+      }
+
       await deleteDoc(doc(db, "users", userToDelete.id));
-      Alert.alert("Başarılı", "Kullanıcı profili silindi.");
+      if (Platform.OS === "web") {
+        window.alert("Başarılı: Kullanıcı profili silindi.");
+      } else {
+        Alert.alert("Başarılı", "Kullanıcı profili silindi.");
+      }
       setDeleteModalVisible(false);
       setUserToDelete(null);
     } catch (error) {
       console.error("Kullanıcı silinirken hata:", error);
-      Alert.alert("Hata", "Kullanıcı silinemedi.");
+      if (Platform.OS === "web") {
+        window.alert("Hata: Kullanıcı silinemedi.");
+      } else {
+        Alert.alert("Hata", "Kullanıcı silinemedi.");
+      }
     }
   };
 

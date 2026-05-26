@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -589,6 +590,8 @@ export default function EditProfile() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
@@ -622,7 +625,7 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
-  formContainer: { width: "100%", maxWidth: 320 },
+  formContainer: { width: "100%", maxWidth: Math.min(400, width * 0.85) },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",

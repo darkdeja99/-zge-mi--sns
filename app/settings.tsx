@@ -1,33 +1,38 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import {
-    EmailAuthProvider,
-    deleteUser,
-    reauthenticateWithCredential,
+  EmailAuthProvider,
+  deleteUser,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 import {
-    collection,
-    deleteDoc,
-    doc,
-    getDocs,
-    query,
-    where,
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  where,
 } from "firebase/firestore";
+import { deleteObject, ref } from "firebase/storage";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../firebaseConfig";
+import { auth, db, storage } from "../firebaseConfig";
 
 export default function Settings() {
   const [password, setPassword] = useState("");
@@ -44,69 +49,111 @@ export default function Settings() {
       return;
     }
 
-    Alert.alert(
-      "Hesabı Sil",
-      "Hesabınızı silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve profil verileriniz kalıcı olarak silinir.",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Evet, Sil",
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              const user = auth.currentUser;
-              if (user && user.email) {
-                // 1. Kullanıcıyı güvenlik gereği yeniden doğruluyoruz
-                const credential = EmailAuthProvider.credential(
-                  user.email,
-                  password,
-                );
-                await reauthenticateWithCredential(user, credential);
+    const executeDelete = async () => {
+      setLoading(true);
+      try {
+        const user = auth.currentUser;
+        if (user && user.email) {
+          // 1. Kullanıcıyı güvenlik gereği yeniden doğruluyoruz
+          const credential = EmailAuthProvider.credential(user.email, password);
+          await reauthenticateWithCredential(user, credential);
 
-                // 2. Kullanıcının yayınladığı tüm iş ilanlarını bulup siliyoruz
-                const jobsRef = collection(db, "jobs");
-                const q = query(jobsRef, where("employerId", "==", user.uid));
-                const querySnapshot = await getDocs(q);
-                const deleteJobPromises = querySnapshot.docs.map((jobDoc) =>
-                  deleteDoc(doc(db, "jobs", jobDoc.id)),
-                );
-                await Promise.all(deleteJobPromises);
+          // 2. Kullanıcının yayınladığı tüm iş ilanlarını bulup siliyoruz
+          const jobsRef = collection(db, "jobs");
+          const q = query(jobsRef, where("employerId", "==", user.uid));
+          const querySnapshot = await getDocs(q);
+          const deleteJobPromises = querySnapshot.docs.map((jobDoc) =>
+            deleteDoc(doc(db, "jobs", jobDoc.id)),
+          );
+          await Promise.all(deleteJobPromises);
 
-                // 3. Firestore'dan kullanıcı profil belgesini (doc) siliyoruz
-                await deleteDoc(doc(db, "users", user.uid));
+          // 3. Firebase Storage'dan kullanıcının profil fotoğrafını siliyoruz
+          if (user.photoURL) {
+            const photoRef = ref(storage, `profile_pictures/${user.uid}`);
+            await deleteObject(photoRef).catch(() => {}); // Fotoğraf bulunamazsa veya hata olursa yoksay
+          }
 
-                // 4. Firebase Auth üzerinden kullanıcı hesabını siliyoruz
-                await deleteUser(user);
-
-                Alert.alert("Başarılı", "Hesabınız başarıyla silindi.", [
-                  {
-                    text: "Tamam",
-                    onPress: () => {
-                      if (typeof router.dismissAll === "function") {
-                        router.dismissAll();
-                      }
-                      router.replace("/");
-                    },
-                  },
-                ]);
-              }
-            } catch (error: any) {
-              let errorMessage = "Hesap silinirken bir hata oluştu.";
-              if (
-                error.code === "auth/wrong-password" ||
-                error.code === "auth/invalid-credential"
-              ) {
-                errorMessage = "Mevcut şifreniz yanlış.";
-              }
-              Alert.alert("Hata", errorMessage);
-            } finally {
-              setLoading(false);
+          // 4. Log kaydı oluşturuyoruz (Kullanıcı kendi sildiğinde admin'e bildirmek için)
+          try {
+            const userDocSnap = await getDoc(doc(db, "users", user.uid));
+            let userName = user.displayName || "Bilinmiyor";
+            let userRole = "user";
+            if (userDocSnap.exists()) {
+              const data = userDocSnap.data();
+              userName =
+                `${data.name || ""} ${data.surname || ""}`.trim() || userName;
+              userRole = data.role || "user";
             }
-          },
-        },
-      ],
-    );
+            await addDoc(collection(db, "deleted_users"), {
+              originalUserId: user.uid,
+              name: userName,
+              email: user.email || "Bilinmiyor",
+              role: userRole,
+              reason: "Kullanıcı kendi hesabını sildi.",
+              deletedAt: serverTimestamp(),
+              deletedBy: user.uid,
+            });
+          } catch (logError) {
+            console.error("Log kaydı alınamadı:", logError);
+          }
+
+          // 5. Firestore'dan kullanıcı profil belgesini (doc) siliyoruz
+          await deleteDoc(doc(db, "users", user.uid));
+
+          // 6. Firebase Auth üzerinden kullanıcı hesabını siliyoruz
+          await deleteUser(user);
+
+          if (Platform.OS === "web") {
+            window.alert("Hesabınız başarıyla silindi.");
+            router.dismissAll();
+            router.replace("/");
+          } else {
+            Alert.alert("Başarılı", "Hesabınız başarıyla silindi.", [
+              {
+                text: "Tamam",
+                onPress: () => {
+                  router.dismissAll();
+                  router.replace("/");
+                },
+              },
+            ]);
+          }
+        }
+      } catch (error: any) {
+        let errorMessage = "Hesap silinirken bir hata oluştu.";
+        if (
+          error.code === "auth/wrong-password" ||
+          error.code === "auth/invalid-credential"
+        ) {
+          errorMessage = "Mevcut şifreniz yanlış.";
+        }
+        if (Platform.OS === "web") {
+          window.alert(errorMessage);
+        } else {
+          Alert.alert("Hata", errorMessage);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Hesabınızı silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve profil verileriniz kalıcı olarak silinir.",
+      );
+      if (confirmed) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert(
+        "Hesabı Sil",
+        "Hesabınızı silmek istediğinize emin misiniz? Bu işlem geri alınamaz ve profil verileriniz kalıcı olarak silinir.",
+        [
+          { text: "İptal", style: "cancel" },
+          { text: "Evet, Sil", style: "destructive", onPress: executeDelete },
+        ],
+      );
+    }
   };
 
   return (
@@ -210,6 +257,8 @@ export default function Settings() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
@@ -237,7 +286,7 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(400, width * 0.85),
     marginBottom: 30,
   },
   menuButton: {
@@ -265,7 +314,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 30,
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(400, width * 0.85),
   },
   warningTitle: {
     color: "#d9534f",
@@ -280,7 +329,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-  formContainer: { width: "100%", maxWidth: 320 },
+  formContainer: { width: "100%", maxWidth: Math.min(400, width * 0.85) },
   label: { color: "#ccc", fontSize: 14, marginBottom: 10, fontWeight: "600" },
   inputContainer: {
     flexDirection: "row",

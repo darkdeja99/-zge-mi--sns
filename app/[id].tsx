@@ -5,109 +5,35 @@ import * as Print from "expo-print";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
 import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    query,
-    where,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    Modal,
-    Platform,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ReadMoreText from "../components/ReadMoreText";
 import { db } from "../firebaseConfig";
+import { Experience, ResumeData, UserProfileData } from "../types/profile";
 
-interface UserProfileData {
-  name: string;
-  surname: string;
-  email?: string;
-  photoURL?: string;
-  headline?: string;
-  location?: string;
-  gender?: string;
-  birthDate?: string;
-  phoneNumber?: string;
-}
-
-interface Experience {
-  title: string;
-  company: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
-interface EducationInfo {
-  school: string;
-  fieldOfStudy: string;
-  startDate: string;
-  endDate: string;
-  gpa: string;
-}
-
-interface Language {
-  language: string;
-  level: string;
-}
-
-interface Certificate {
-  name: string;
-  issuer: string;
-  year: string;
-}
-
-interface Project {
-  name: string;
-  link?: string;
-  description: string;
-}
-
-interface ResumeData {
-  summary: string;
-  skills: string[];
-  experiences: Experience[];
-  educations?: any[];
-  highSchool?: EducationInfo;
-  university?: EducationInfo;
-  languages?: Language[];
-  certificates?: Certificate[];
-  projects?: Project[];
-}
-
-const ReadMoreText = ({ text, style }: { text: string; style?: any }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isLong = text.length > 150;
-
-  return (
-    <View>
-      <Text
-        style={style || styles.sectionContent}
-        numberOfLines={isExpanded ? undefined : 4}
-      >
-        {text}
-      </Text>
-      {isLong && (
-        <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
-          <Text style={styles.readMoreText}>
-            {isExpanded ? "Daha Az Göster" : "Devamını Oku"}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
+// Uygulama kök adresi (Çevre değişkeninden alır, yoksa varsayılanı kullanır)
+const APP_BASE_URL =
+  process.env.EXPO_PUBLIC_BASE_URL || "https://ozgecmis-sns.web.app";
 
 export default function UserProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -115,6 +41,7 @@ export default function UserProfile() {
   const [resume, setResume] = useState<ResumeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [userJobs, setUserJobs] = useState<any[]>([]);
+  const [jobsError, setJobsError] = useState<string | null>(null);
 
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<{
@@ -137,21 +64,15 @@ export default function UserProfile() {
     setDetailModalVisible(true);
   };
 
-  const openSkillModal = (skill: string) => {
-    setSelectedDetail({
-      title: skill,
-      subtitle: "Yetenek Detayı",
-      description: `${skill} yeteneği, kullanıcının profilinde yer alan profesyonel niteliklerinden biridir.`,
-      type: "skill",
-    });
-    setDetailModalVisible(true);
-  };
-
   useEffect(() => {
     const fetchUserJobs = async () => {
       if (!id) return;
+      setJobsError(null);
       try {
-        const q = query(collection(db, "jobs"), where("employerId", "==", id));
+        const q = query(
+          collection(db, "jobs"),
+          where("employerId", "==", id as string),
+        );
         const querySnapshot = await getDocs(q);
         const jobsList = querySnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -160,6 +81,7 @@ export default function UserProfile() {
         setUserJobs(jobsList);
       } catch (error) {
         console.error("Kullanıcının ilanları çekilirken hata:", error);
+        setJobsError("İlanlar yüklenirken bir sorun oluştu.");
       }
     };
 
@@ -171,7 +93,7 @@ export default function UserProfile() {
 
     const fetchData = async () => {
       try {
-        const userDocRef = doc(db, "users", id);
+        const userDocRef = doc(db, "users", id as string);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
@@ -206,7 +128,7 @@ export default function UserProfile() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${profile?.name} ${profile?.surname} adlı kullanıcının Özgeçmiş-SNS profiline göz at!\nProfil Linki: https://ozgecmis-sns.web.app/${id}`,
+        message: `${profile?.name} ${profile?.surname} adlı kullanıcının Özgeçmiş-SNS profiline göz at!\nProfil Linki: ${APP_BASE_URL}/${id as string}`,
       });
     } catch (error: any) {
       Alert.alert("Paylaşım Hatası", error.message);
@@ -263,7 +185,7 @@ export default function UserProfile() {
               }
 
               ${
-                resume?.experiences?.length
+                resume?.experiences && resume.experiences.length > 0
                   ? `<div class="section">
                       <h2 class="section-title">İş Deneyimi</h2>
                       ${resume.experiences
@@ -286,7 +208,7 @@ export default function UserProfile() {
               ${
                 resume?.university?.school ||
                 resume?.highSchool?.school ||
-                resume?.educations?.length
+                (resume?.educations && resume.educations.length > 0)
                   ? `<div class="section">
                       <h2 class="section-title">Eğitim Bilgileri</h2>
                       ${
@@ -320,7 +242,8 @@ export default function UserProfile() {
                       ${
                         !resume?.university?.school &&
                         !resume?.highSchool?.school &&
-                        resume?.educations?.length
+                        resume?.educations &&
+                        resume.educations.length > 0
                           ? resume.educations
                               .map(
                                 (edu) => `
@@ -342,7 +265,7 @@ export default function UserProfile() {
 
               <div class="grid-section">
                 ${
-                  resume?.skills?.length
+                  resume?.skills && resume.skills.length > 0
                     ? `<div class="section">
                         <h2 class="section-title">Yetenekler</h2>
                         <div class="skills-container">
@@ -353,7 +276,7 @@ export default function UserProfile() {
                 }
 
                 ${
-                  resume?.languages?.length
+                  resume?.languages && resume.languages.length > 0
                     ? `<div class="section">
                         <h2 class="section-title">Yabancı Diller</h2>
                         ${resume.languages
@@ -371,7 +294,7 @@ export default function UserProfile() {
               </div>
 
               ${
-                resume?.certificates?.length
+                resume?.certificates && resume.certificates.length > 0
                   ? `<div class="section">
                       <h2 class="section-title">Sertifikalar ve Kurslar</h2>
                       ${resume.certificates
@@ -392,7 +315,7 @@ export default function UserProfile() {
               }
 
               ${
-                resume?.projects?.length
+                resume?.projects && resume.projects.length > 0
                   ? `<div class="section">
                       <h2 class="section-title">Projeler</h2>
                       ${resume.projects
@@ -475,32 +398,36 @@ export default function UserProfile() {
           <Ionicons name="share-social-outline" size={24} color="white" />
         </TouchableOpacity>
         <ScrollView contentContainerStyle={styles.container}>
-          {userJobs.length > 0 && (
+          {(userJobs.length > 0 || jobsError) && (
             <View style={styles.jobsSection}>
               <Text style={styles.sectionTitle}>Verdiği İş İlanları</Text>
-              {userJobs.map((job) => (
-                <TouchableOpacity
-                  key={job.id}
-                  style={styles.jobCard}
-                  onPress={() => router.push(`/job-details/${job.id}`)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.jobTitle} numberOfLines={1}>
-                      {job.title}
-                    </Text>
-                    <Text style={styles.jobCompany} numberOfLines={1}>
-                      {job.company}
-                    </Text>
-                  </View>
-                  <Text style={styles.jobLocation}>{job.location}</Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color="#aaa"
-                    style={{ marginLeft: 5 }}
-                  />
-                </TouchableOpacity>
-              ))}
+              {jobsError ? (
+                <Text style={styles.errorText}>{jobsError}</Text>
+              ) : (
+                userJobs.map((job) => (
+                  <TouchableOpacity
+                    key={job.id}
+                    style={styles.jobCard}
+                    onPress={() => router.push(`/job-details/${job.id}`)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.jobTitle} numberOfLines={1}>
+                        {job.title}
+                      </Text>
+                      <Text style={styles.jobCompany} numberOfLines={1}>
+                        {job.company}
+                      </Text>
+                    </View>
+                    <Text style={styles.jobLocation}>{job.location}</Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color="#aaa"
+                      style={{ marginLeft: 5 }}
+                    />
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           )}
 
@@ -713,14 +640,9 @@ export default function UserProfile() {
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Yetenekler</Text>
                 <View style={styles.skillsContainer}>
-                  {resume.skills?.length > 0 ? (
+                  {resume.skills && resume.skills.length > 0 ? (
                     resume.skills.map((skill, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.skillBadge}
-                        onPress={() => openSkillModal(skill)}
-                        activeOpacity={0.8}
-                      >
+                      <View key={index} style={styles.skillBadge}>
                         <Ionicons
                           name="checkmark-circle"
                           size={14}
@@ -729,7 +651,7 @@ export default function UserProfile() {
                         <Text style={[styles.skillText, { marginLeft: 4 }]}>
                           {skill}
                         </Text>
-                      </TouchableOpacity>
+                      </View>
                     ))
                   ) : (
                     <Text style={styles.sectionContent}>
@@ -768,7 +690,7 @@ export default function UserProfile() {
 
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>İş Deneyimi</Text>
-                {resume.experiences?.length > 0 ? (
+                {resume.experiences && resume.experiences.length > 0 ? (
                   resume.experiences.map((exp, index) => (
                     <TouchableOpacity
                       key={index}
@@ -1041,5 +963,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#ddd",
     lineHeight: 24,
+  },
+  errorText: {
+    color: "#ff4d4d",
+    fontSize: 14,
+    fontStyle: "italic",
+    marginTop: 5,
   },
 });

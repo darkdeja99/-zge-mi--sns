@@ -1,21 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-    EmailAuthProvider,
-    reauthenticateWithCredential,
-    updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from "firebase/auth";
 import { useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../firebaseConfig";
@@ -191,6 +192,8 @@ export default function AccountSettings() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
@@ -217,7 +220,7 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  formContainer: { width: "100%", maxWidth: 320 },
+  formContainer: { width: "100%", maxWidth: Math.min(400, width * 0.85) },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",

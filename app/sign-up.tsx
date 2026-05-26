@@ -5,7 +5,10 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -31,19 +34,52 @@ export default function SignUp() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
 
+  // Animasyon değerini tutan referans
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnimation, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(shakeAnimation, {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(shakeAnimation, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(shakeAnimation, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    ]).start();
+  };
+
   const handleSignUp = async () => {
     if (password !== confirmPassword) {
+      triggerShake();
       Alert.alert("Hata", "Şifreler eşleşmiyor.");
       return;
     }
     if (name === "" || surname === "" || email === "" || password === "") {
+      triggerShake();
       Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
       return;
     }
+
+    setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -76,11 +112,20 @@ export default function SignUp() {
         phoneNumber: "",
         createdAt: serverTimestamp(),
       });
-      Alert.alert("Başarılı", "Hesabınız başarıyla oluşturuldu!", [
-        { text: "Tamam", onPress: () => router.replace("/sign-in") },
-      ]);
+
+      if (Platform.OS === "web") {
+        window.alert("Hesabınız başarıyla oluşturuldu!");
+        router.replace("/(tabs)/home");
+      } else {
+        Alert.alert("Başarılı", "Hesabınız başarıyla oluşturuldu!", [
+          { text: "Tamam", onPress: () => router.replace("/(tabs)/home") },
+        ]);
+      }
     } catch (error: any) {
+      triggerShake();
       Alert.alert("Kayıt Hatası", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -104,7 +149,12 @@ export default function SignUp() {
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
             <Text style={styles.title}>Kayıt Ol</Text>
-            <View style={styles.formContainer}>
+            <Animated.View
+              style={[
+                styles.formContainer,
+                { transform: [{ translateX: shakeAnimation }] },
+              ]}
+            >
               <View style={styles.inputContainer}>
                 <Ionicons
                   name="person-outline"
@@ -322,10 +372,18 @@ export default function SignUp() {
                   />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.button} onPress={handleSignUp}>
-                <Text style={styles.buttonText}>Kayıt Ol</Text>
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleSignUp}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Kayıt Ol</Text>
+                )}
               </TouchableOpacity>
-            </View>
+            </Animated.View>
             <View style={styles.footer}>
               <Text style={styles.footerText}>Zaten hesabın var mı? </Text>
               <Link href="/sign-in" asChild>
@@ -340,6 +398,8 @@ export default function SignUp() {
     </View>
   );
 }
+
+const { width } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
   background: {
@@ -379,7 +439,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(400, width * 0.85),
   },
   inputContainer: {
     flexDirection: "row",
@@ -441,6 +501,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     marginTop: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     color: "#fff",

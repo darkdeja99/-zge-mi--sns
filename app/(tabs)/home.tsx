@@ -3,7 +3,13 @@ import { Picker } from "@react-native-picker/picker";
 import { Image } from "expo-image";
 import { Link, router } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import {
+  collection,
+  limit,
+  onSnapshot,
+  orderBy,
+  query
+} from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -120,6 +126,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [displayedCount, setDisplayedCount] = useState(10);
+  const [queryLimit, setQueryLimit] = useState(30); // Sunucudan çekilecek maksimum kayıt sayısı
   const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
 
   useEffect(() => {
@@ -138,16 +145,20 @@ export default function Home() {
       return;
     }
 
-    // Mevcut kullanıcı dışındaki tüm kullanıcıları anlık olarak dinle
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("__name__", "!=", currentUser.uid));
+
+    // Kullanıcıları tarihe göre sıralayarak ve queryLimit kadar sınırlandırarak sunucudan çekiyoruz
+    const q = query(usersRef, orderBy("createdAt", "desc"), limit(queryLimit));
 
     const unsubscribe = onSnapshot(
       q,
       (querySnapshot) => {
         const usersList: UserData[] = [];
         querySnapshot.forEach((doc) => {
-          usersList.push({ id: doc.id, ...doc.data() } as UserData);
+          // Mevcut kullanıcıyı (kendimizi) sonuçlardan hariç tutuyoruz
+          if (doc.id !== currentUser.uid) {
+            usersList.push({ id: doc.id, ...doc.data() } as UserData);
+          }
         });
 
         // Kullanıcıları en yeni eklenen/güncellenenden eskiye doğru sırala
@@ -170,7 +181,7 @@ export default function Home() {
     );
 
     return () => unsubscribe(); // Cleanup listener on unmount
-  }, [currentUser]);
+  }, [currentUser, queryLimit]);
 
   const filteredUsers = useMemo(() => {
     let filtered = users;
@@ -250,9 +261,11 @@ export default function Home() {
   }, []);
 
   const handleLoadMore = () => {
-    if (displayedCount < filteredUsers.length) {
-      setDisplayedCount((prevCount) => prevCount + 10);
+    // Eğer ekranda gösterilen eleman sayısı, indirilen verilere yaklaştıysa sunucudan limiti artır
+    if (displayedCount >= filteredUsers.length - 10) {
+      setQueryLimit((prev) => prev + 20);
     }
+    setDisplayedCount((prevCount) => prevCount + 10);
   };
 
   const paginatedUsers = useMemo(() => {

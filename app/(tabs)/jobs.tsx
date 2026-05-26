@@ -1,30 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-  arrayRemove,
-  arrayUnion,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
+    arrayRemove,
+    arrayUnion,
+    collection,
+    deleteDoc,
+    doc,
+    onSnapshot,
+    orderBy,
+    query,
+    updateDoc,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Platform,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
+import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
 export interface Job {
   id: string;
@@ -37,20 +39,6 @@ export interface Job {
   employerId: string;
   createdAt?: any;
 }
-
-// Firestore Timestamp'i okunabilir zamana çeviren yardımcı fonksiyon
-const formatTimeAgo = (timestamp: any) => {
-  if (!timestamp) return "";
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return "Az önce";
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} dk önce`;
-  if (diffInSeconds < 86400)
-    return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-  return `${Math.floor(diffInSeconds / 86400)} gün önce`;
-};
 
 // React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
 const JobCardItem = memo(
@@ -251,21 +239,32 @@ export default function Jobs() {
   }, []);
 
   const handleDeleteJob = useCallback((jobId: string) => {
-    Alert.alert("İlanı Sil", "Bu ilanı silmek istediğinize emin misiniz?", [
-      { text: "İptal", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, "jobs", jobId));
-          } catch (error) {
-            console.error("İlan silinirken hata:", error);
-            Alert.alert("Hata", "İlan silinemedi.");
-          }
-        },
-      },
-    ]);
+    const executeDelete = async () => {
+      try {
+        await deleteDoc(doc(db, "jobs", jobId));
+      } catch (error) {
+        console.error("İlan silinirken hata:", error);
+        if (Platform.OS === "web") {
+          window.alert("Hata: İlan silinemedi.");
+        } else {
+          Alert.alert("Hata", "İlan silinemedi.");
+        }
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Bu ilanı silmek istediğinize emin misiniz?",
+      );
+      if (confirmed) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert("İlanı Sil", "Bu ilanı silmek istediğinize emin misiniz?", [
+        { text: "İptal", style: "cancel" },
+        { text: "Sil", style: "destructive", onPress: executeDelete },
+      ]);
+    }
   }, []);
 
   const toggleSaveJob = useCallback(async (jobId: string, isSaved: boolean) => {

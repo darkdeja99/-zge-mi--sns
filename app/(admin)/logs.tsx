@@ -7,11 +7,13 @@ import {
     FlatList,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../firebaseConfig";
+import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
 interface LogData {
   id: string;
@@ -24,24 +26,12 @@ interface LogData {
   deletedBy: string;
 }
 
-const formatTimeAgo = (timestamp: any) => {
-  if (!timestamp) return "";
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return "Az önce";
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} dk önce`;
-  if (diffInSeconds < 86400)
-    return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-  return `${Math.floor(diffInSeconds / 86400)} gün önce`;
-};
-
 export default function Logs() {
   const [userLogs, setUserLogs] = useState<LogData[]>([]);
   const [jobLogs, setJobLogs] = useState<LogData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"all" | "user" | "job">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let usersLoaded = false;
@@ -130,9 +120,23 @@ export default function Logs() {
       return timeB - timeA;
     });
 
-    if (activeTab === "all") return combined;
-    return combined.filter((log) => log.type === activeTab);
-  }, [userLogs, jobLogs, activeTab]);
+    let result = combined;
+    if (activeTab !== "all") {
+      result = result.filter((log) => log.type === activeTab);
+    }
+
+    if (searchQuery.trim() !== "") {
+      const lowerQuery = searchQuery.toLowerCase();
+      result = result.filter(
+        (log) =>
+          log.primaryText?.toLowerCase().includes(lowerQuery) ||
+          log.secondaryText?.toLowerCase().includes(lowerQuery) ||
+          log.reason?.toLowerCase().includes(lowerQuery) ||
+          log.deletedBy?.toLowerCase().includes(lowerQuery),
+      );
+    }
+    return result;
+  }, [userLogs, jobLogs, activeTab, searchQuery]);
 
   const renderLogItem = ({ item }: { item: LogData }) => {
     const isUser = item.type === "user";
@@ -188,6 +192,12 @@ export default function Logs() {
             style={[styles.tabButton, activeTab === "all" && styles.activeTab]}
             onPress={() => setActiveTab("all")}
           >
+            <Ionicons
+              name="list-outline"
+              size={16}
+              color={activeTab === "all" ? "#fff" : "#aaa"}
+              style={{ marginRight: 6 }}
+            />
             <Text
               style={[
                 styles.tabText,
@@ -201,6 +211,12 @@ export default function Logs() {
             style={[styles.tabButton, activeTab === "user" && styles.activeTab]}
             onPress={() => setActiveTab("user")}
           >
+            <Ionicons
+              name="people-outline"
+              size={16}
+              color={activeTab === "user" ? "#fff" : "#aaa"}
+              style={{ marginRight: 6 }}
+            />
             <Text
               style={[
                 styles.tabText,
@@ -214,6 +230,12 @@ export default function Logs() {
             style={[styles.tabButton, activeTab === "job" && styles.activeTab]}
             onPress={() => setActiveTab("job")}
           >
+            <Ionicons
+              name="briefcase-outline"
+              size={16}
+              color={activeTab === "job" ? "#fff" : "#aaa"}
+              style={{ marginRight: 6 }}
+            />
             <Text
               style={[
                 styles.tabText,
@@ -223,6 +245,30 @@ export default function Logs() {
               İlanlar
             </Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchContainer}>
+          <Ionicons
+            name="search-outline"
+            size={20}
+            color="#999"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="İsim, e-posta, neden veya admin ID ara..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              style={styles.clearIcon}
+            >
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {loading ? (
@@ -268,13 +314,16 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: "row",
     marginHorizontal: 20,
-    marginVertical: 15,
+    marginTop: 15,
+    marginBottom: 10,
     backgroundColor: "rgba(255, 255, 255, 0.15)",
     borderRadius: 10,
     padding: 4,
   },
   tabButton: {
     flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
     paddingVertical: 8,
     alignItems: "center",
     borderRadius: 8,
@@ -282,6 +331,18 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: "#4DA8DA" },
   tabText: { color: "#aaa", fontWeight: "600", fontSize: 13 },
   activeTabText: { color: "#fff" },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: 10,
+    marginHorizontal: 20,
+    marginBottom: 15,
+    paddingHorizontal: 15,
+  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, color: "#fff", paddingVertical: 10, fontSize: 14 },
+  clearIcon: { marginLeft: 10, padding: 5 },
   listContainer: { paddingHorizontal: 20, paddingBottom: 20 },
   logCard: {
     backgroundColor: "rgba(255, 255, 255, 0.05)",

@@ -1,26 +1,27 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-  arrayRemove,
-  arrayUnion,
-  doc,
-  getDoc,
-  onSnapshot,
-  updateDoc,
+    arrayRemove,
+    arrayUnion,
+    doc,
+    getDoc,
+    onSnapshot,
+    updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
+import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
 interface JobDetails {
   id: string;
@@ -87,20 +88,6 @@ export default function JobDetailsScreen() {
     return () => unsub();
   }, [id]);
 
-  const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return "";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) return "Az önce";
-    if (diffInSeconds < 3600)
-      return `${Math.floor(diffInSeconds / 60)} dk önce`;
-    if (diffInSeconds < 86400)
-      return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-    return `${Math.floor(diffInSeconds / 86400)} gün önce`;
-  };
-
   const handleApply = async () => {
     const targetEmail = job?.contactEmail || employerEmailFallback;
 
@@ -120,6 +107,11 @@ export default function JobDetailsScreen() {
       const canOpen = await Linking.canOpenURL(mailtoUrl);
       if (canOpen) {
         await Linking.openURL(mailtoUrl);
+
+        Alert.alert(
+          "Yönlendirildi",
+          "E-posta uygulamanız açıldı. Lütfen başvurunuzu e-posta üzerinden göndermeyi unutmayın!",
+        );
 
         // E-posta penceresi başarıyla açıldığında başvuruyu veritabanına kaydet
         if (auth.currentUser && id) {

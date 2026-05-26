@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import {
   Alert,
   Animated,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -31,22 +32,22 @@ export default function SignIn() {
       Animated.timing(shakeAnimation, {
         toValue: 10,
         duration: 50,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(shakeAnimation, {
         toValue: -10,
         duration: 50,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(shakeAnimation, {
         toValue: 10,
         duration: 50,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(shakeAnimation, {
         toValue: 0,
         duration: 50,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
   };
@@ -162,6 +163,8 @@ export default function SignIn() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -200,7 +203,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(400, width * 0.85),
   },
   inputContainer: {
     flexDirection: "row",

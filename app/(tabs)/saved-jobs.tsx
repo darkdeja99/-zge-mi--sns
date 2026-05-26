@@ -4,10 +4,11 @@ import {
   arrayRemove,
   collection,
   doc,
+  documentId,
   onSnapshot,
-  orderBy,
   query,
-  updateDoc
+  updateDoc,
+  where
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -22,20 +23,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
+import { formatTimeAgo } from "../../utils/formatTimeAgo";
 import { Job } from "./jobs";
 
-// Firestore Timestamp'i okunabilir zamana çeviren yardımcı fonksiyon
-const formatTimeAgo = (timestamp: any) => {
-  if (!timestamp) return "";
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return "Az önce";
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} dk önce`;
-  if (diffInSeconds < 86400)
-    return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-  return `${Math.floor(diffInSeconds / 86400)} gün önce`;
+// ID dizilerini 30'luk gruplara (batch/chunk) bölmek için yardımcı fonksiyon
+const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 };
 
 // React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
@@ -122,31 +119,57 @@ export default function SavedJobs() {
   }, []);
 
   useEffect(() => {
-    const jobsRef = collection(db, "jobs");
-    const q = query(jobsRef, orderBy("createdAt", "desc"));
+    if (savedJobIds.length === 0) {
+      setJobs([]);
+      setLoading(false);
+      return;
+    }
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const jobsList: Job[] = [];
-        snapshot.forEach((doc) => {
-          jobsList.push({ id: doc.id, ...doc.data() } as Job);
-        });
-        setJobs(jobsList);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("İş ilanlarını çekerken hata:", error);
-        setLoading(false);
-      },
-    );
+    // ID'leri 30'arlı gruplara bölüyoruz
+    const chunks = chunkArray(savedJobIds, 30);
+    const unsubscribes: (() => void)[] = [];
+    const allJobsMap = new Map<string, Job>();
 
-    return () => unsubscribe();
-  }, []);
+    chunks.forEach((chunk) => {
+      const q = query(collection(db, "jobs"), where(documentId(), "in", chunk));
+
+      const unsub = onSnapshot(
+        q,
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "removed") {
+              allJobsMap.delete(change.doc.id);
+            } else {
+              allJobsMap.set(change.doc.id, {
+                id: change.doc.id,
+                ...change.doc.data(),
+              } as Job);
+            }
+          });
+
+          // Tüm batch'lerden gelen ilanları birleştirip tarihe göre sıralıyoruz
+          const jobsList = Array.from(allJobsMap.values());
+          jobsList.sort(
+            (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0),
+          );
+
+          setJobs([...jobsList]);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Kaydedilen ilanlar çekilirken hata:", error);
+          setLoading(false);
+        },
+      );
+      unsubscribes.push(unsub);
+    });
+
+    return () => unsubscribes.forEach((unsub) => unsub());
+  }, [savedJobIds]);
 
   const filteredJobs = useMemo(() => {
-    // Yalnızca kullanıcının kaydettiği (savedJobIds içerisinde bulunan) ilanları filtrele
-    let filtered = jobs.filter((job) => savedJobIds.includes(job.id));
+    // jobs dizisi zaten sadece kaydedilen ilanları içeriyor
+    let filtered = jobs;
 
     if (searchQuery.trim() !== "") {
       const queryStr = searchQuery.toLowerCase();
@@ -160,7 +183,7 @@ export default function SavedJobs() {
       );
     }
     return filtered;
-  }, [searchQuery, jobs, savedJobIds]);
+  }, [searchQuery, jobs]);
 
   // Arama metni değiştiğinde gösterilecek eleman sayısını ilk sayfaya (10) sıfırla
   useEffect(() => {

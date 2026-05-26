@@ -4,52 +4,27 @@ import { router, useNavigation } from "expo-router";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../firebaseConfig";
-
-interface Experience {
-  title: string;
-  company: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
-interface EducationInfo {
-  school: string;
-  fieldOfStudy: string;
-  startDate: string;
-  endDate: string;
-  gpa: string;
-}
-
-interface Language {
-  language: string;
-  level: string;
-}
-
-interface Certificate {
-  name: string;
-  issuer: string;
-  year: string;
-}
-
-interface Project {
-  name: string;
-  link: string;
-  description: string;
-}
+import {
+  Certificate,
+  EducationInfo,
+  Experience,
+  Language,
+  Project,
+} from "../types/profile";
 
 const jobTitles = [
   "Ağ Uzmanı",
@@ -2127,6 +2102,8 @@ export default function MyResume() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
@@ -2183,7 +2160,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingBottom: 50,
   },
-  formContainer: { width: "100%", maxWidth: 320 },
+  formContainer: { width: "100%", maxWidth: Math.min(450, width * 0.9) },
   label: {
     fontSize: 16,
     color: "#fff",

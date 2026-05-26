@@ -4,6 +4,7 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import {
   Alert,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -102,6 +103,8 @@ export default function ForgotPassword() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
@@ -126,7 +129,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 20,
   },
-  formContainer: { width: "100%", maxWidth: 320 },
+  formContainer: { width: "100%", maxWidth: Math.min(400, width * 0.85) },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",

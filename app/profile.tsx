@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   LayoutAnimation,
   Linking,
   Modal,
@@ -18,85 +19,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ReadMoreText from "../components/ReadMoreText";
 import { auth, db } from "../firebaseConfig";
-
-interface Experience {
-  title: string;
-  company: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-}
-
-interface EducationInfo {
-  school: string;
-  fieldOfStudy: string;
-  startDate: string;
-  endDate: string;
-  gpa: string;
-}
-
-interface Language {
-  language: string;
-  level: string;
-}
-
-interface Certificate {
-  name: string;
-  issuer: string;
-  year: string;
-}
-
-interface Project {
-  name: string;
-  link?: string;
-  description: string;
-}
-
-interface UserProfileData {
-  name: string;
-  surname: string;
-  email: string;
-  photoURL?: string;
-  headline?: string;
-  location?: string;
-  gender?: string;
-  birthDate?: string;
-  phoneNumber?: string;
-  summary?: string;
-  skills?: string[];
-  experiences?: Experience[];
-  educations?: any[];
-  highSchool?: EducationInfo;
-  university?: EducationInfo;
-  languages?: Language[];
-  certificates?: Certificate[];
-  projects?: Project[];
-  role?: string;
-}
-
-const ReadMoreText = ({ text, style }: { text: string; style?: any }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const isLong = text.length > 150;
-
-  return (
-    <View>
-      <Text
-        style={style || styles.sectionContent}
-        numberOfLines={isExpanded ? undefined : 4}
-      >
-        {text}
-      </Text>
-      {isLong ? (
-        <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
-          <Text style={styles.readMoreText}>
-            {isExpanded ? "Daha Az Göster" : "Devamını Oku"}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
-};
+import { Experience, UserProfileData } from "../types/profile";
 
 export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
@@ -130,16 +55,6 @@ export default function Profile() {
       description:
         exp.description || "Bu deneyim için detaylı açıklama eklenmemiş.",
       type: "experience",
-    });
-    setDetailModalVisible(true);
-  };
-
-  const openSkillModal = (skill: string) => {
-    setSelectedDetail({
-      title: skill,
-      subtitle: "Yetenek Detayı",
-      description: `${skill} yeteneği, kullanıcının profilinde yer alan profesyonel niteliklerinden biridir.`,
-      type: "skill",
     });
     setDetailModalVisible(true);
   };
@@ -187,14 +102,32 @@ export default function Profile() {
   }, [user]);
 
   const handleSignOut = async () => {
-    try {
-      if (typeof router.dismissAll === "function") {
+    const executeSignOut = async () => {
+      try {
         router.dismissAll(); // Geri dönülecek tüm geçmiş sayfaları temizle
+        await signOut(auth);
+        router.replace("/"); // Çıkış yaptıktan sonra index.tsx (açılış) sayfasına yönlendir
+      } catch (error: any) {
+        if (Platform.OS === "web") {
+          window.alert("Çıkış Hatası: " + error.message);
+        } else {
+          Alert.alert("Çıkış Hatası", error.message);
+        }
       }
-      await signOut(auth);
-      router.replace("/"); // Çıkış yaptıktan sonra index.tsx (açılış) sayfasına yönlendir
-    } catch (error: any) {
-      Alert.alert("Çıkış Hatası", error.message);
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Çıkış yapmak istediğininze emin misiniz?",
+      );
+      if (confirmed) {
+        executeSignOut();
+      }
+    } else {
+      Alert.alert("Çıkış Yap", "Çıkış yapmak istediğinize emin misiniz?", [
+        { text: "İptal", style: "cancel" },
+        { text: "Çıkış Yap", style: "destructive", onPress: executeSignOut },
+      ]);
     }
   };
 
@@ -598,12 +531,7 @@ export default function Profile() {
                         {userProfile?.skills &&
                         userProfile.skills.length > 0 ? (
                           userProfile.skills.map((skill, index) => (
-                            <TouchableOpacity
-                              key={index}
-                              style={styles.skillBadge}
-                              onPress={() => openSkillModal(skill)}
-                              activeOpacity={0.8}
-                            >
+                            <View key={index} style={styles.skillBadge}>
                               <Ionicons
                                 name="checkmark-circle"
                                 size={14}
@@ -614,7 +542,7 @@ export default function Profile() {
                               >
                                 {skill}
                               </Text>
-                            </TouchableOpacity>
+                            </View>
                           ))
                         ) : (
                           <Text style={styles.sectionContent}>
@@ -800,6 +728,8 @@ export default function Profile() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -855,7 +785,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 10,
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(450, width * 0.9),
     marginBottom: 20,
   },
   name: {

@@ -2,13 +2,14 @@ import { Link, router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Animated,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { auth } from "../firebaseConfig";
 
@@ -28,12 +29,12 @@ export default function Index() {
           Animated.timing(fadeAnim, {
             toValue: 1,
             duration: 1000,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }),
           Animated.timing(translateYAnim, {
             toValue: 0,
             duration: 1000,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== "web",
           }),
         ]).start();
       }
@@ -93,6 +94,8 @@ export default function Index() {
   );
 }
 
+const { width } = Dimensions.get("window");
+
 const styles = StyleSheet.create({
   background: {
     flex: 1,
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: Math.min(400, width * 0.85),
     gap: 15,
   },
   button: {

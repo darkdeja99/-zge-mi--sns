@@ -1,4 +1,5 @@
 import { Stack, router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
@@ -8,8 +9,7 @@ export default function AdminLayout() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      const user = auth.currentUser;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setIsAdmin(false);
         router.replace("/");
@@ -31,9 +31,9 @@ export default function AdminLayout() {
         setIsAdmin(false);
         router.replace("/(tabs)/home");
       }
-    };
+    });
 
-    checkAdminStatus();
+    return () => unsubscribe();
   }, []);
 
   if (isAdmin === null) {
