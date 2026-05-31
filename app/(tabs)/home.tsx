@@ -1,14 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import * as Device from "expo-device";
 import { Image } from "expo-image";
+import * as Notifications from "expo-notifications";
 import { Link, router } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
   collection,
+  doc,
   limit,
   onSnapshot,
   orderBy,
-  query
+  query,
+  updateDoc,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -26,6 +30,88 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
+
+// Bildirimlerin cihazda nasıl görüneceğini ayarlıyoruz
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
+
+async function registerForPushNotificationsAsync() {
+  if (Platform.OS === "web") return null;
+  let token;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+    });
+  }
+  if (Device.isDevice) {
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") {
+      console.log("Bildirim izni alınamadı!");
+      return;
+    }
+    token = (await Notifications.getExpoPushTokenAsync()).data;
+  } else {
+    console.log("Fiziksel bir cihaz kullanmalısınız.");
+  }
+  return token;
+}
+
+// Önümüzdeki 'daysCount' gün boyunca, her gün rastgele bir saatte bildirim zamanlar
+async function scheduleRandomDailyNotifications(daysCount: number = 30) {
+  if (Platform.OS === "web") return;
+  try {
+    // Önce eskiden zamanlanmış bildirimleri temizleyelim ki üst üste binmesinler
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    const today = new Date();
+
+    for (let i = 1; i <= daysCount; i++) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + i);
+
+      // Gündüz saatlerinde (örneğin sabah 09:00 ile akşam 20:00 arası) rastgele bir saat seçelim
+      const minHour = 9;
+      const maxHour = 20;
+      const randomHour =
+        Math.floor(Math.random() * (maxHour - minHour + 1)) + minHour;
+      const randomMinute = Math.floor(Math.random() * 60);
+
+      targetDate.setHours(randomHour, randomMinute, 0, 0);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Sana Özel Yeni İlanlar Olabilir! 🚀",
+          body: "Bugün uygulamaya göz atmak için harika bir zaman.",
+          data: { screen: "jobs" }, // İsteğe bağlı, yönlendirme için veri
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: targetDate,
+        }, // Sadece o gün ve rastgele hesaplanan saatte çalışır
+      });
+    }
+  } catch (error) {
+    console.error("Bildirimler zamanlanırken hata oluştu:", error);
+  }
+}
 
 interface UserData {
   id: string;
@@ -144,6 +230,21 @@ export default function Home() {
       setLoading(false);
       return;
     }
+
+    // Kullanıcı giriş yaptıysa push token'ını alıp profiline kaydediyoruz
+    registerForPushNotificationsAsync().then(async (token) => {
+      if (token) {
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          await updateDoc(userRef, { pushToken: token });
+
+          // Rastgele günlük bildirimleri zamanla
+          await scheduleRandomDailyNotifications(30);
+        } catch (error) {
+          console.error("Token kaydedilemedi:", error);
+        }
+      }
+    });
 
     const usersRef = collection(db, "users");
 

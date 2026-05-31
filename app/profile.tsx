@@ -104,9 +104,23 @@ export default function Profile() {
   const handleSignOut = async () => {
     const executeSignOut = async () => {
       try {
-        router.dismissAll(); // Geri dönülecek tüm geçmiş sayfaları temizle
         await signOut(auth);
-        router.replace("/"); // Çıkış yaptıktan sonra index.tsx (açılış) sayfasına yönlendir
+
+        if (Platform.OS === "web") {
+          window.alert("Tekrar görüşmek üzere!");
+          router.dismissAll();
+          router.replace("/");
+        } else {
+          Alert.alert("Çıkış Yapıldı", "Tekrar görüşmek üzere!", [
+            {
+              text: "Tamam",
+              onPress: () => {
+                router.dismissAll();
+                router.replace("/");
+              },
+            },
+          ]);
+        }
       } catch (error: any) {
         if (Platform.OS === "web") {
           window.alert("Çıkış Hatası: " + error.message);

@@ -1,23 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-    arrayRemove,
-    arrayUnion,
-    doc,
-    getDoc,
-    onSnapshot,
-    updateDoc,
+  addDoc,
+  arrayRemove,
+  arrayUnion,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
@@ -34,6 +42,7 @@ interface JobDetails {
   employerId: string;
   contactEmail?: string;
   createdAt?: any;
+  applicants?: string[];
 }
 
 export default function JobDetailsScreen() {
@@ -41,6 +50,8 @@ export default function JobDetailsScreen() {
   const [job, setJob] = useState<JobDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
+  const [isApplied, setIsApplied] = useState(false);
+  const [applicantsList, setApplicantsList] = useState<any[]>([]);
   const [employerEmailFallback, setEmployerEmailFallback] = useState<
     string | null
   >(null);
@@ -79,14 +90,51 @@ export default function JobDetailsScreen() {
   useEffect(() => {
     if (!auth.currentUser || !id) return;
     const userRef = doc(db, "users", auth.currentUser.uid);
-    const unsub = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const savedJobs = docSnap.data().savedJobs || [];
-        setIsSaved(savedJobs.includes(id as string));
-      }
-    });
+    const unsub = onSnapshot(
+      userRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const savedJobs = docSnap.data().savedJobs || [];
+          const appliedJobs = docSnap.data().appliedJobs || [];
+          setIsSaved(savedJobs.includes(id as string));
+          setIsApplied(appliedJobs.includes(id as string));
+        }
+      },
+      (error) => {
+        if (error.code !== "permission-denied") {
+          console.error("Kullanıcı verisi dinlenirken hata:", error);
+        }
+      },
+    );
     return () => unsub();
   }, [id]);
+
+  useEffect(() => {
+    const fetchApplicants = async () => {
+      if (!job || !auth.currentUser || job.employerId !== auth.currentUser.uid)
+        return;
+      if (!job.applicants || job.applicants.length === 0) {
+        setApplicantsList([]);
+        return;
+      }
+
+      try {
+        const fetchedApplicants = await Promise.all(
+          job.applicants.map(async (applicantId) => {
+            const userSnap = await getDoc(doc(db, "users", applicantId));
+            if (userSnap.exists()) {
+              return { id: userSnap.id, ...userSnap.data() };
+            }
+            return null;
+          }),
+        );
+        setApplicantsList(fetchedApplicants.filter(Boolean));
+      } catch (error) {
+        console.error("Başvuranlar çekilirken hata:", error);
+      }
+    };
+    fetchApplicants();
+  }, [job]);
 
   const handleApply = async () => {
     const targetEmail = job?.contactEmail || employerEmailFallback;
@@ -115,9 +163,16 @@ export default function JobDetailsScreen() {
 
         // E-posta penceresi başarıyla açıldığında başvuruyu veritabanına kaydet
         if (auth.currentUser && id) {
+          const currentUserUid = auth.currentUser.uid;
           try {
-            const userRef = doc(db, "users", auth.currentUser.uid);
-            await updateDoc(userRef, { appliedJobs: arrayUnion(id) });
+            const userRef = doc(db, "users", currentUserUid);
+            const jobRef = doc(db, "jobs", id as string);
+            await Promise.all([
+              updateDoc(userRef, { appliedJobs: arrayUnion(id) }),
+              updateDoc(jobRef, {
+                applicants: arrayUnion(currentUserUid),
+              }),
+            ]);
           } catch (err) {
             console.error("Başvuru durumu kaydedilemedi:", err);
           }
@@ -130,6 +185,88 @@ export default function JobDetailsScreen() {
       }
     } catch (error) {
       console.error("Mail uygulaması açılırken hata:", error);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!auth.currentUser || !id) return;
+
+    const currentUserUid = auth.currentUser.uid;
+
+    const executeWithdraw = async () => {
+      const userRef = doc(db, "users", currentUserUid);
+      const jobRef = doc(db, "jobs", id as string);
+      try {
+        await Promise.all([
+          updateDoc(userRef, { appliedJobs: arrayRemove(id) }),
+          updateDoc(jobRef, { applicants: arrayRemove(currentUserUid) }),
+        ]);
+        if (Platform.OS === "web") {
+          window.alert("Başvurunuz başarıyla geri çekildi.");
+        } else {
+          Alert.alert("Başarılı", "Başvurunuz başarıyla geri çekildi.");
+        }
+      } catch (err) {
+        console.error("Başvuru geri çekilirken hata:", err);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Başvurunuzu geri çekmek istediğinize emin misiniz?",
+      );
+      if (confirmed) executeWithdraw();
+    } else {
+      Alert.alert(
+        "Emin misiniz?",
+        "Başvurunuzu geri çekmek istediğinize emin misiniz?",
+        [
+          { text: "İptal", style: "cancel" },
+          { text: "Geri Çek", style: "destructive", onPress: executeWithdraw },
+        ],
+      );
+    }
+  };
+
+  const handleStartChat = async () => {
+    if (!auth.currentUser || !job || !job.employerId) return;
+
+    const currentUserId = auth.currentUser.uid;
+    const targetUserId = job.employerId;
+
+    try {
+      const chatsRef = collection(db, "chats");
+      // Mevcut kullanıcının dahil olduğu sohbetleri ara
+      const q = query(
+        chatsRef,
+        where("participants", "array-contains", currentUserId),
+      );
+      const querySnapshot = await getDocs(q);
+
+      let existingChatId = null;
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        // Bulunan sohbetin katılımcıları arasında işveren de var mı?
+        if (data.participants.includes(targetUserId)) {
+          existingChatId = docSnap.id;
+        }
+      });
+
+      if (existingChatId) {
+        router.push(`/chat/${existingChatId}`);
+      } else {
+        const newChatRef = await addDoc(chatsRef, {
+          participants: [currentUserId, targetUserId],
+          lastMessage: "",
+          lastMessageTime: serverTimestamp(),
+          lastMessageSenderId: currentUserId,
+          lastMessageRead: true,
+        });
+        router.push(`/chat/${newChatRef.id}`);
+      }
+    } catch (error) {
+      console.error("Sohbet başlatılırken hata:", error);
+      Alert.alert("Hata", "Sohbet başlatılamadı.");
     }
   };
 
@@ -166,6 +303,8 @@ export default function JobDetailsScreen() {
   }
 
   if (!job) return null;
+
+  const isEmployer = auth.currentUser?.uid === job.employerId;
 
   return (
     <View style={styles.background}>
@@ -233,19 +372,96 @@ export default function JobDetailsScreen() {
             </View>
             <Text style={styles.descriptionText}>{job.description}</Text>
           </View>
+
+          {isEmployer && applicantsList.length > 0 && (
+            <View style={[styles.descriptionSection, { marginTop: 15 }]}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="people" size={20} color="#4DA8DA" />
+                <Text style={styles.sectionTitle}>
+                  Başvuranlar ({applicantsList.length})
+                </Text>
+              </View>
+              {applicantsList.map((applicant) => (
+                <TouchableOpacity
+                  key={applicant.id}
+                  style={styles.applicantCard}
+                  onPress={() => router.push(`/${applicant.id}`)}
+                >
+                  <View style={styles.applicantAvatarContainer}>
+                    {applicant.photoURL ? (
+                      <Image
+                        source={{ uri: applicant.photoURL }}
+                        style={{ width: 40, height: 40, borderRadius: 20 }}
+                      />
+                    ) : (
+                      <Text style={styles.applicantAvatarText}>
+                        {applicant.name
+                          ? applicant.name.charAt(0).toUpperCase()
+                          : "K"}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.applicantInfo}>
+                    <Text
+                      style={styles.applicantName}
+                    >{`${applicant.name || ""} ${applicant.surname || ""}`}</Text>
+                    {applicant.headline && (
+                      <Text style={styles.applicantHeadline} numberOfLines={1}>
+                        {applicant.headline}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#aaa" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-            <Ionicons
-              name="paper-plane-outline"
-              size={20}
-              color="#fff"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.applyButtonText}>Hemen Başvur</Text>
-          </TouchableOpacity>
-        </View>
+        {!isEmployer && (
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.messageButton}
+              onPress={handleStartChat}
+            >
+              <Ionicons
+                name="chatbubbles-outline"
+                size={20}
+                color="#4DA8DA"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.messageButtonText}>Mesaj Gönder</Text>
+            </TouchableOpacity>
+
+            {isApplied ? (
+              <TouchableOpacity
+                style={[styles.applyButton, { backgroundColor: "#d9534f" }]}
+                onPress={handleWithdraw}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.applyButtonText}>Geri Çek</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={handleApply}
+              >
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.applyButtonText}>Başvur</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -354,12 +570,27 @@ const styles = StyleSheet.create({
   },
   descriptionText: { color: "#ddd", fontSize: 15, lineHeight: 24 },
   footer: {
+    flexDirection: "row",
     padding: 20,
     backgroundColor: "#0f2027",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
+    gap: 10,
   },
+  messageButton: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "rgba(77, 168, 218, 0.15)",
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#4DA8DA",
+  },
+  messageButtonText: { color: "#4DA8DA", fontSize: 16, fontWeight: "bold" },
   applyButton: {
+    flex: 1,
     flexDirection: "row",
     backgroundColor: "#4DA8DA",
     paddingVertical: 15,
@@ -368,4 +599,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   applyButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  applicantCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  applicantAvatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(77, 168, 218, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  applicantAvatarText: { color: "#4DA8DA", fontSize: 18, fontWeight: "bold" },
+  applicantInfo: { flex: 1 },
+  applicantName: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  applicantHeadline: { color: "#ccc", fontSize: 13, marginTop: 2 },
 });

@@ -1,25 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-  arrayRemove,
-  collection,
-  doc,
-  documentId,
-  onSnapshot,
-  query,
-  updateDoc,
-  where
+    arrayRemove,
+    collection,
+    doc,
+    documentId,
+    onSnapshot,
+    query,
+    updateDoc,
+    where,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
@@ -109,11 +109,19 @@ export default function SavedJobs() {
   useEffect(() => {
     if (auth.currentUser) {
       const userRef = doc(db, "users", auth.currentUser.uid);
-      const unsubUser = onSnapshot(userRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setSavedJobIds(docSnap.data().savedJobs || []);
-        }
-      });
+      const unsubUser = onSnapshot(
+        userRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setSavedJobIds(docSnap.data().savedJobs || []);
+          }
+        },
+        (error) => {
+          if (error.code !== "permission-denied") {
+            console.error("Kullanıcı verisi dinlenirken hata:", error);
+          }
+        },
+      );
       return () => unsubUser();
     }
   }, []);
@@ -157,7 +165,9 @@ export default function SavedJobs() {
           setLoading(false);
         },
         (error) => {
-          console.error("Kaydedilen ilanlar çekilirken hata:", error);
+          if (error.code !== "permission-denied") {
+            console.error("Kaydedilen ilanlar çekilirken hata:", error);
+          }
           setLoading(false);
         },
       );

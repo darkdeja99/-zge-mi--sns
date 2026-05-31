@@ -1,28 +1,28 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-    arrayRemove,
-    arrayUnion,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    orderBy,
-    query,
-    updateDoc,
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Platform,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
@@ -38,6 +38,7 @@ export interface Job {
   description?: string;
   employerId: string;
   createdAt?: any;
+  applicants?: string[];
 }
 
 // React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
@@ -49,6 +50,8 @@ const JobCardItem = memo(
     isEmployer,
     onToggleSave,
     onDelete,
+    onApply,
+    onWithdraw,
   }: {
     item: Job;
     isSaved: boolean;
@@ -56,6 +59,8 @@ const JobCardItem = memo(
     isEmployer: boolean;
     onToggleSave: (id: string, isSaved: boolean) => void;
     onDelete: (id: string) => void;
+    onApply: (id: string) => void;
+    onWithdraw: (id: string) => void;
   }) => (
     <TouchableOpacity
       style={styles.jobCard}
@@ -112,26 +117,50 @@ const JobCardItem = memo(
 
       <View style={styles.jobFooter}>
         <View style={styles.tagsContainer}>
-          {isApplied && (
-            <View
+          {isApplied ? (
+            <TouchableOpacity
               style={[
                 styles.tagBadge,
                 {
-                  backgroundColor: "rgba(76, 175, 80, 0.2)",
-                  borderColor: "#4CAF50",
+                  backgroundColor: "rgba(244, 67, 54, 0.2)",
+                  borderColor: "#F44336",
                   marginRight: 5,
                 },
               ]}
+              onPress={() => onWithdraw(item.id)}
             >
               <Text
                 style={[
                   styles.tagText,
-                  { color: "#4CAF50", fontWeight: "bold" },
+                  { color: "#F44336", fontWeight: "bold" },
                 ]}
               >
-                Başvuruldu
+                Başvuruyu Geri Çek
               </Text>
-            </View>
+            </TouchableOpacity>
+          ) : (
+            !isEmployer && (
+              <TouchableOpacity
+                style={[
+                  styles.tagBadge,
+                  {
+                    backgroundColor: "rgba(77, 168, 218, 0.2)",
+                    borderColor: "#4DA8DA",
+                    marginRight: 5,
+                  },
+                ]}
+                onPress={() => onApply(item.id)}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    { color: "#4DA8DA", fontWeight: "bold" },
+                  ]}
+                >
+                  Hızlı Başvur
+                </Text>
+              </TouchableOpacity>
+            )
           )}
 
           {item.type ? (
@@ -159,12 +188,20 @@ export default function Jobs() {
   useEffect(() => {
     if (auth.currentUser) {
       const userRef = doc(db, "users", auth.currentUser.uid);
-      const unsubUser = onSnapshot(userRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setSavedJobIds(docSnap.data().savedJobs || []);
-          setAppliedJobIds(docSnap.data().appliedJobs || []);
-        }
-      });
+      const unsubUser = onSnapshot(
+        userRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setSavedJobIds(docSnap.data().savedJobs || []);
+            setAppliedJobIds(docSnap.data().appliedJobs || []);
+          }
+        },
+        (error) => {
+          if (error.code !== "permission-denied") {
+            console.error("Kullanıcı verisi dinlenirken hata:", error);
+          }
+        },
+      );
       return () => unsubUser();
     }
   }, []);
@@ -185,7 +222,9 @@ export default function Jobs() {
         setLoading(false);
       },
       (error) => {
-        console.error("İş ilanlarını çekerken hata:", error);
+        if (error.code !== "permission-denied") {
+          console.error("İş ilanlarını çekerken hata:", error);
+        }
         setLoading(false);
       },
     );
@@ -267,6 +306,82 @@ export default function Jobs() {
     }
   }, []);
 
+  const handleApplyJob = useCallback((jobId: string) => {
+    const executeApply = async () => {
+      if (!auth.currentUser) return;
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      const jobRef = doc(db, "jobs", jobId);
+      try {
+        await Promise.all([
+          updateDoc(userRef, { appliedJobs: arrayUnion(jobId) }),
+          updateDoc(jobRef, { applicants: arrayUnion(auth.currentUser.uid) }),
+        ]);
+
+        if (Platform.OS === "web") {
+          window.alert("Başvurunuz başarıyla iletildi!");
+        } else {
+          Alert.alert("Başarılı", "Başvurunuz başarıyla iletildi!");
+        }
+      } catch (error) {
+        console.error("İlana başvurulurken hata:", error);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Bu ilana başvurmak istediğinize emin misiniz?",
+      );
+      if (confirmed) executeApply();
+    } else {
+      Alert.alert(
+        "Başvuru Yap",
+        "Bu ilana başvurmak istediğinize emin misiniz?",
+        [
+          { text: "İptal", style: "cancel" },
+          { text: "Başvur", style: "default", onPress: executeApply },
+        ],
+      );
+    }
+  }, []);
+
+  const handleWithdrawJob = useCallback((jobId: string) => {
+    const executeWithdraw = async () => {
+      if (!auth.currentUser) return;
+      const userRef = doc(db, "users", auth.currentUser.uid);
+      const jobRef = doc(db, "jobs", jobId);
+      try {
+        await Promise.all([
+          updateDoc(userRef, { appliedJobs: arrayRemove(jobId) }),
+          updateDoc(jobRef, { applicants: arrayRemove(auth.currentUser.uid) }),
+        ]);
+
+        if (Platform.OS === "web") {
+          window.alert("Başvurunuz başarıyla geri çekildi.");
+        } else {
+          Alert.alert("Başarılı", "Başvurunuz başarıyla geri çekildi.");
+        }
+      } catch (error) {
+        console.error("Başvuru geri çekilirken hata:", error);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Bu ilana olan başvurunuzu geri çekmek istediğinize emin misiniz?",
+      );
+      if (confirmed) executeWithdraw();
+    } else {
+      Alert.alert(
+        "Geri Çek",
+        "Bu ilana olan başvurunuzu geri çekmek istediğinize emin misiniz?",
+        [
+          { text: "İptal", style: "cancel" },
+          { text: "Geri Çek", style: "destructive", onPress: executeWithdraw },
+        ],
+      );
+    }
+  }, []);
+
   const toggleSaveJob = useCallback(async (jobId: string, isSaved: boolean) => {
     if (!auth.currentUser) return;
     const userRef = doc(db, "users", auth.currentUser.uid);
@@ -293,10 +408,19 @@ export default function Jobs() {
           isEmployer={isEmployer}
           onToggleSave={toggleSaveJob}
           onDelete={handleDeleteJob}
+          onApply={handleApplyJob}
+          onWithdraw={handleWithdrawJob}
         />
       );
     },
-    [savedJobIds, appliedJobIds, toggleSaveJob, handleDeleteJob],
+    [
+      savedJobIds,
+      appliedJobIds,
+      toggleSaveJob,
+      handleDeleteJob,
+      handleApplyJob,
+      handleWithdrawJob,
+    ],
   );
 
   if (loading) {

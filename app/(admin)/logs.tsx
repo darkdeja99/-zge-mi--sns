@@ -3,13 +3,13 @@ import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../firebaseConfig";
@@ -67,7 +67,9 @@ export default function Logs() {
         checkLoading();
       },
       (error) => {
-        console.error("Kullanıcı logları çekilirken hata:", error);
+        if (error.code !== "permission-denied") {
+          console.error("Kullanıcı logları çekilirken hata:", error);
+        }
         usersLoaded = true;
         checkLoading();
       },
@@ -99,7 +101,9 @@ export default function Logs() {
         checkLoading();
       },
       (error) => {
-        console.error("İlan logları çekilirken hata:", error);
+        if (error.code !== "permission-denied") {
+          console.error("İlan logları çekilirken hata:", error);
+        }
         jobsLoaded = true;
         checkLoading();
       },
