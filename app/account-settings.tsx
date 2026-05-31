@@ -5,19 +5,18 @@ import {
   reauthenticateWithCredential,
   updatePassword,
 } from "firebase/auth";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../firebaseConfig";
 
@@ -29,6 +28,9 @@ export default function AccountSettings() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
+  const newPasswordRef = useRef<TextInput>(null);
+  const confirmNewPasswordRef = useRef<TextInput>(null);
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmNewPassword) {
@@ -68,125 +70,128 @@ export default function AccountSettings() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Şifre Değiştir</Text>
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={
-                    focusedInput === "currentPassword" ? "#007AFF" : "#555"
-                  }
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Mevcut Şifre"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showCurrentPassword}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  onFocus={() => setFocusedInput("currentPassword")}
-                  onBlur={() => setFocusedInput(null)}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                  style={{ padding: 5 }}
-                >
-                  <Ionicons
-                    name={
-                      showCurrentPassword ? "eye-outline" : "eye-off-outline"
-                    }
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="key-outline"
-                  size={20}
-                  color={focusedInput === "newPassword" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Yeni Şifre"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showNewPassword}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  onFocus={() => setFocusedInput("newPassword")}
-                  onBlur={() => setFocusedInput(null)}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                  style={{ padding: 5 }}
-                >
-                  <Ionicons
-                    name={showNewPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={20}
-                  color={
-                    focusedInput === "confirmNewPassword" ? "#007AFF" : "#555"
-                  }
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Yeni Şifre Tekrar"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showConfirmNewPassword}
-                  value={confirmNewPassword}
-                  onChangeText={setConfirmNewPassword}
-                  onFocus={() => setFocusedInput("confirmNewPassword")}
-                  onBlur={() => setFocusedInput(null)}
-                />
-                <TouchableOpacity
-                  onPress={() =>
-                    setShowConfirmNewPassword(!showConfirmNewPassword)
-                  }
-                  style={{ padding: 5 }}
-                >
-                  <Ionicons
-                    name={
-                      showConfirmNewPassword ? "eye-outline" : "eye-off-outline"
-                    }
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Şifre Değiştir</Text>
+          <View style={styles.formContainer}>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={focusedInput === "currentPassword" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Mevcut Şifre"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showCurrentPassword}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                onFocus={() => setFocusedInput("currentPassword")}
+                onBlur={() => setFocusedInput(null)}
+                returnKeyType="next"
+                onSubmitEditing={() => newPasswordRef.current?.focus()}
+              />
               <TouchableOpacity
-                style={styles.button}
-                onPress={handleChangePassword}
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                style={{ padding: 5 }}
               >
-                <Text style={styles.buttonText}>Şifreyi Güncelle</Text>
+                <Ionicons
+                  name={showCurrentPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
               </TouchableOpacity>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="key-outline"
+                size={20}
+                color={focusedInput === "newPassword" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={newPasswordRef}
+                style={styles.input}
+                placeholder="Yeni Şifre"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                onFocus={() => setFocusedInput("newPassword")}
+                onBlur={() => setFocusedInput(null)}
+                returnKeyType="next"
+                onSubmitEditing={() => confirmNewPasswordRef.current?.focus()}
+              />
+              <TouchableOpacity
+                onPress={() => setShowNewPassword(!showNewPassword)}
+                style={{ padding: 5 }}
+              >
+                <Ionicons
+                  name={showNewPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color={
+                  focusedInput === "confirmNewPassword" ? "#007AFF" : "#555"
+                }
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={confirmNewPasswordRef}
+                style={styles.input}
+                placeholder="Yeni Şifre Tekrar"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showConfirmNewPassword}
+                value={confirmNewPassword}
+                onChangeText={setConfirmNewPassword}
+                onFocus={() => setFocusedInput("confirmNewPassword")}
+                onBlur={() => setFocusedInput(null)}
+                returnKeyType="go"
+                onSubmitEditing={handleChangePassword}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setShowConfirmNewPassword(!showConfirmNewPassword)
+                }
+                style={{ padding: 5 }}
+              >
+                <Ionicons
+                  name={
+                    showConfirmNewPassword ? "eye-outline" : "eye-off-outline"
+                  }
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleChangePassword}
+            >
+              <Text style={styles.buttonText}>Şifreyi Güncelle</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </View>
   );

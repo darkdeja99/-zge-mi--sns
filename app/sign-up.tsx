@@ -9,15 +9,14 @@ import {
   Alert,
   Animated,
   Dimensions,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../firebaseConfig";
 
@@ -87,9 +86,15 @@ export default function SignUp() {
         password,
       );
       const user = userCredential.user;
+
+      // Firebase Storage'dan aldığınız sabit fotoğraf URL'sini buraya ekleyin
+      const DEFAULT_PHOTO_URL =
+        "https://firebasestorage.googleapis.com/v0/b/ozgecmis-sns.firebasestorage.app/o/profile_pictures%2Fdefault-avatar.png?alt=media&token=cee05d39-fb65-40e7-8702-5bfdbbfac7de";
+
       // Firebase Auth profilini güncelle
       await updateProfile(user, {
         displayName: `${name} ${surname}`,
+        photoURL: DEFAULT_PHOTO_URL,
       });
 
       let finalBirthDate = "";
@@ -104,7 +109,7 @@ export default function SignUp() {
         surname: surname,
         email: user.email,
         role: "user",
-        photoURL: null,
+        photoURL: DEFAULT_PHOTO_URL,
         headline: "",
         location: "",
         gender: gender,
@@ -132,268 +137,253 @@ export default function SignUp() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Kayıt Ol</Text>
-            <Animated.View
-              style={[
-                styles.formContainer,
-                { transform: [{ translateX: shakeAnimation }] },
-              ]}
-            >
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={focusedInput === "name" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  onFocus={() => setFocusedInput("name")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Ad"
-                  placeholderTextColor="#aaa"
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={focusedInput === "surname" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={surname}
-                  onChangeText={setSurname}
-                  onFocus={() => setFocusedInput("surname")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Soyad"
-                  placeholderTextColor="#aaa"
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={styles.datePickerContainer}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={20}
-                  color="#555"
-                  style={styles.inputIcon}
-                />
-                <View style={styles.datePickersRow}>
-                  <Picker
-                    selectedValue={birthDay}
-                    onValueChange={(itemValue) => setBirthDay(itemValue)}
-                    style={styles.datePicker}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Gün" value="" color="#aaa" />
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                      const dayStr = day.toString().padStart(2, "0");
-                      return (
-                        <Picker.Item
-                          key={dayStr}
-                          label={dayStr}
-                          value={dayStr}
-                        />
-                      );
-                    })}
-                  </Picker>
-                  <Picker
-                    selectedValue={birthMonth}
-                    onValueChange={(itemValue) => setBirthMonth(itemValue)}
-                    style={styles.datePicker}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Ay" value="" color="#aaa" />
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(
-                      (month) => {
-                        const monthStr = month.toString().padStart(2, "0");
-                        return (
-                          <Picker.Item
-                            key={monthStr}
-                            label={monthStr}
-                            value={monthStr}
-                          />
-                        );
-                      },
-                    )}
-                  </Picker>
-                  <Picker
-                    selectedValue={birthYear}
-                    onValueChange={(itemValue) => setBirthYear(itemValue)}
-                    style={styles.datePickerYear}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Yıl" value="" color="#aaa" />
-                    {Array.from(
-                      { length: 100 },
-                      (_, i) => new Date().getFullYear() - i,
-                    ).map((year) => {
-                      const yearStr = year.toString();
-                      return (
-                        <Picker.Item
-                          key={yearStr}
-                          label={yearStr}
-                          value={yearStr}
-                        />
-                      );
-                    })}
-                  </Picker>
-                </View>
-              </View>
-              <View style={styles.pickerContainer}>
-                <Ionicons
-                  name="male-female-outline"
-                  size={20}
-                  color={focusedInput === "gender" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Kayıt Ol</Text>
+          <Animated.View
+            style={[
+              styles.formContainer,
+              { transform: [{ translateX: shakeAnimation }] },
+            ]}
+          >
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={focusedInput === "name" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onFocus={() => setFocusedInput("name")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Ad"
+                placeholderTextColor="#aaa"
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={focusedInput === "surname" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={surname}
+                onChangeText={setSurname}
+                onFocus={() => setFocusedInput("surname")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Soyad"
+                placeholderTextColor="#aaa"
+                autoCapitalize="words"
+              />
+            </View>
+            <View style={styles.datePickerContainer}>
+              <Ionicons
+                name="calendar-outline"
+                size={20}
+                color="#555"
+                style={styles.inputIcon}
+              />
+              <View style={styles.datePickersRow}>
                 <Picker
-                  selectedValue={gender}
-                  onValueChange={(itemValue) => setGender(itemValue)}
-                  style={styles.picker}
-                  onFocus={() => setFocusedInput("gender")}
-                  onBlur={() => setFocusedInput(null)}
+                  selectedValue={birthDay}
+                  onValueChange={(itemValue) => setBirthDay(itemValue)}
+                  style={styles.datePicker}
+                  dropdownIconColor="#555"
                 >
-                  <Picker.Item label="Cinsiyet Seçiniz" value="" color="#aaa" />
-                  <Picker.Item label="Kadın" value="Kadın" />
-                  <Picker.Item label="Erkek" value="Erkek" />
-                  <Picker.Item
-                    label="Belirtmek İstemiyorum"
-                    value="Belirtmek İstemiyorum"
-                  />
+                  <Picker.Item label="Gün" value="" color="#aaa" />
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                    const dayStr = day.toString().padStart(2, "0");
+                    return (
+                      <Picker.Item key={dayStr} label={dayStr} value={dayStr} />
+                    );
+                  })}
+                </Picker>
+                <Picker
+                  selectedValue={birthMonth}
+                  onValueChange={(itemValue) => setBirthMonth(itemValue)}
+                  style={styles.datePicker}
+                  dropdownIconColor="#555"
+                >
+                  <Picker.Item label="Ay" value="" color="#aaa" />
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+                    const monthStr = month.toString().padStart(2, "0");
+                    return (
+                      <Picker.Item
+                        key={monthStr}
+                        label={monthStr}
+                        value={monthStr}
+                      />
+                    );
+                  })}
+                </Picker>
+                <Picker
+                  selectedValue={birthYear}
+                  onValueChange={(itemValue) => setBirthYear(itemValue)}
+                  style={styles.datePickerYear}
+                  dropdownIconColor="#555"
+                >
+                  <Picker.Item label="Yıl" value="" color="#aaa" />
+                  {Array.from(
+                    { length: 100 },
+                    (_, i) => new Date().getFullYear() - i,
+                  ).map((year) => {
+                    const yearStr = year.toString();
+                    return (
+                      <Picker.Item
+                        key={yearStr}
+                        label={yearStr}
+                        value={yearStr}
+                      />
+                    );
+                  })}
                 </Picker>
               </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color={focusedInput === "email" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  onFocus={() => setFocusedInput("email")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="E-posta"
-                  placeholderTextColor="#aaa"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  returnKeyType="next"
-                  onSubmitEditing={() => passwordInputRef.current?.focus()}
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={focusedInput === "password" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  ref={passwordInputRef}
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Şifre"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showPassword}
-                  returnKeyType="next"
-                  onSubmitEditing={() =>
-                    confirmPasswordInputRef.current?.focus()
-                  }
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={20}
-                  color={
-                    focusedInput === "confirmPassword" ? "#007AFF" : "#555"
-                  }
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  ref={confirmPasswordInputRef}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  onFocus={() => setFocusedInput("confirmPassword")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Şifre Tekrar"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showConfirmPassword}
-                  returnKeyType="go"
-                  onSubmitEditing={handleSignUp}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeIcon}
-                >
-                  <Ionicons
-                    name={
-                      showConfirmPassword ? "eye-outline" : "eye-off-outline"
-                    }
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleSignUp}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Kayıt Ol</Text>
-                )}
-              </TouchableOpacity>
-            </Animated.View>
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Zaten hesabın var mı? </Text>
-              <Link href="/sign-in" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.link}>Giriş Yap</Text>
-                </TouchableOpacity>
-              </Link>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            <View style={styles.pickerContainer}>
+              <Ionicons
+                name="male-female-outline"
+                size={20}
+                color={focusedInput === "gender" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <Picker
+                selectedValue={gender}
+                onValueChange={(itemValue) => setGender(itemValue)}
+                style={styles.picker}
+                onFocus={() => setFocusedInput("gender")}
+                onBlur={() => setFocusedInput(null)}
+              >
+                <Picker.Item label="Cinsiyet Seçiniz" value="" color="#aaa" />
+                <Picker.Item label="Kadın" value="Kadın" />
+                <Picker.Item label="Erkek" value="Erkek" />
+                <Picker.Item
+                  label="Belirtmek İstemiyorum"
+                  value="Belirtmek İstemiyorum"
+                />
+              </Picker>
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={focusedInput === "email" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="E-posta"
+                placeholderTextColor="#aaa"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
+              />
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={focusedInput === "password" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={passwordInputRef}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedInput("password")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Şifre"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showPassword}
+                returnKeyType="next"
+                onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color={focusedInput === "confirmPassword" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={confirmPasswordInputRef}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                onFocus={() => setFocusedInput("confirmPassword")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Şifre Tekrar"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showConfirmPassword}
+                returnKeyType="go"
+                onSubmitEditing={handleSignUp}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSignUp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Kayıt Ol</Text>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Zaten hesabın var mı? </Text>
+            <Link href="/sign-in" asChild>
+              <TouchableOpacity>
+                <Text style={styles.link}>Giriş Yap</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </View>
   );

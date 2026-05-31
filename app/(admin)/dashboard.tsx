@@ -3,14 +3,14 @@ import { router, useFocusEffect } from "expo-router";
 import { collection, getCountFromServer } from "firebase/firestore";
 import { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { db } from "../../firebaseConfig";
 
 export default function AdminDashboard() {
@@ -57,11 +57,9 @@ export default function AdminDashboard() {
 
         <ScrollView contentContainerStyle={styles.container}>
           {loading ? (
-            <ActivityIndicator
-              size="large"
-              color="#4DA8DA"
-              style={{ marginTop: 50 }}
-            />
+            <View style={{ marginTop: 50 }}>
+              <CustomLoader text="Veriler Yükleniyor..." />
+            </View>
           ) : (
             <>
               <View style={styles.statsContainer}>

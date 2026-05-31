@@ -3,17 +3,15 @@ import { router } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import {
-  Alert,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../firebaseConfig";
 
@@ -46,58 +44,52 @@ export default function ForgotPassword() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Şifremi Unuttum</Text>
-            <View style={styles.formContainer}>
-              <Text style={styles.instructions}>
-                Şifrenizi sıfırlamak için kayıtlı e-posta adresinizi girin.
-              </Text>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color={focusedInput === "email" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  onFocus={() => setFocusedInput("email")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="E-posta"
-                  placeholderTextColor="#aaa"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.button}
-                onPress={handlePasswordReset}
-              >
-                <Text style={styles.buttonText}>
-                  Sıfırlama E-postası Gönder
-                </Text>
-              </TouchableOpacity>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Şifremi Unuttum</Text>
+          <View style={styles.formContainer}>
+            <Text style={styles.instructions}>
+              Şifrenizi sıfırlamak için kayıtlı e-posta adresinizi girin.
+            </Text>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={focusedInput === "email" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="E-posta"
+                placeholderTextColor="#aaa"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handlePasswordReset}
+            >
+              <Text style={styles.buttonText}>Sıfırlama E-postası Gönder</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </View>
   );

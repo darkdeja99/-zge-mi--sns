@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { ReactNativeZoomableView } from "@openspacelabs/react-native-zoomable-view";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import {
     addDoc,
@@ -12,11 +14,14 @@ import {
     serverTimestamp,
     updateDoc,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     StyleSheet,
     Text,
@@ -25,13 +30,15 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { auth, db } from "../../firebaseConfig";
+import CustomLoader from "../../components/CustomLoader";
+import { auth, db, storage } from "../../firebaseConfig";
 
 interface Message {
   id: string;
   text: string;
   senderId: string;
   createdAt: any;
+  imageUrl?: string;
 }
 
 export default function ChatRoomScreen() {
@@ -40,6 +47,10 @@ export default function ChatRoomScreen() {
   const [inputText, setInputText] = useState("");
   const [otherUser, setOtherUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [messageLimit, setMessageLimit] = useState(20);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
 
   const currentUserId = auth.currentUser?.uid;
 
@@ -82,7 +93,7 @@ export default function ChatRoomScreen() {
     });
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, messageLimit]);
 
   const handleSend = async () => {
     if (!inputText.trim() || !id || !currentUserId) return;
@@ -105,6 +116,63 @@ export default function ChatRoomScreen() {
       });
     } catch (error) {
       console.error("Mesaj gönderilirken hata:", error);
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.5,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        await uploadImageAndSendMessage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Resim seçilirken hata:", error);
+    }
+  };
+
+  const uploadImageAndSendMessage = async (uri: string) => {
+    if (!id || !currentUserId) return;
+    setUploadingImage(true);
+    try {
+      const blob: any = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = (e) =>
+          reject(new TypeError("Ağ isteği başarısız oldu (Resim yüklenemedi)"));
+        xhr.responseType = "blob";
+        xhr.open("GET", uri, true);
+        xhr.send(null);
+      });
+
+      const fileName = `chat_images/${id}/${Date.now()}_${currentUserId}.jpg`;
+      const storageRef = ref(storage, fileName);
+
+      await uploadBytes(storageRef, blob);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      await addDoc(collection(db, "chats", id, "messages"), {
+        text: "📷 Fotoğraf",
+        imageUrl: downloadUrl,
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+      });
+
+      await updateDoc(doc(db, "chats", id), {
+        lastMessage: "📷 Fotoğraf",
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: currentUserId,
+        lastMessageRead: false,
+      });
+    } catch (error) {
+      console.error("Resim yüklenirken hata:", error);
+      Alert.alert("Hata", "Resim gönderilirken bir sorun oluştu.");
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -131,14 +199,27 @@ export default function ChatRoomScreen() {
             isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isMe ? styles.messageTextMe : styles.messageTextOther,
-            ]}
-          >
-            {item.text}
-          </Text>
+          {item.imageUrl ? (
+            <TouchableOpacity
+              onPress={() => setSelectedImage(item.imageUrl as string)}
+            >
+              <Image
+                source={{ uri: item.imageUrl }}
+                style={styles.messageImage}
+                contentFit="cover"
+              />
+            </TouchableOpacity>
+          ) : null}
+          {(!item.imageUrl || item.text !== "📷 Fotoğraf") && (
+            <Text
+              style={[
+                styles.messageText,
+                isMe ? styles.messageTextMe : styles.messageTextOther,
+              ]}
+            >
+              {item.text}
+            </Text>
+          )}
           <Text
             style={[
               styles.messageTime,
@@ -190,7 +271,7 @@ export default function ChatRoomScreen() {
           {/* Messages List */}
           {loading ? (
             <View style={{ flex: 1, justifyContent: "center" }}>
-              <ActivityIndicator size="large" color="#4DA8DA" />
+              <CustomLoader text="Mesajlar Yükleniyor..." />
             </View>
           ) : (
             <FlatList
@@ -200,18 +281,47 @@ export default function ChatRoomScreen() {
               inverted // En alttan başlayıp yukarı doğru sıralanmasını sağlar
               contentContainerStyle={styles.messagesList}
               showsVerticalScrollIndicator={false}
+              onEndReached={() => {
+                // Sadece mevcut mesaj sayısı limite ulaştıysa limiti artır
+                if (messages.length >= messageLimit) {
+                  setMessageLimit((prev) => prev + 20);
+                }
+              }}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                messages.length >= messageLimit ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#4DA8DA"
+                    style={{ marginVertical: 10 }}
+                  />
+                ) : null
+              }
             />
           )}
 
           {/* Input Area */}
           <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={styles.attachButton}
+              onPress={handlePickImage}
+              disabled={uploadingImage}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color="#4DA8DA" />
+              ) : (
+                <Ionicons name="image-outline" size={26} color="#aaa" />
+              )}
+            </TouchableOpacity>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, isFocused && styles.textInputFocused]}
               placeholder="Mesajınızı yazın..."
               placeholderTextColor="#aaa"
               value={inputText}
               onChangeText={setInputText}
               multiline
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
             />
             <TouchableOpacity
               style={[styles.sendButton, !inputText.trim() && { opacity: 0.5 }]}
@@ -228,6 +338,39 @@ export default function ChatRoomScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Resim Tam Ekran Modalı */}
+      <Modal
+        visible={!!selectedImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <View style={styles.imageModalOverlay}>
+          <TouchableOpacity
+            style={styles.closeModalButton}
+            onPress={() => setSelectedImage(null)}
+          >
+            <Ionicons name="close" size={36} color="#fff" />
+          </TouchableOpacity>
+          {selectedImage && (
+            <ReactNativeZoomableView
+              maxZoom={3}
+              minZoom={1}
+              zoomStep={0.5}
+              initialZoom={1}
+              bindToBorders={true}
+              style={{ width: "100%", height: "100%" }}
+            >
+              <Image
+                source={{ uri: selectedImage }}
+                style={styles.fullScreenImage}
+                contentFit="contain"
+              />
+            </ReactNativeZoomableView>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -285,6 +428,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     maxHeight: 100,
     fontSize: 15,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  textInputFocused: {
+    borderColor: "#4DA8DA",
+  },
+  attachButton: {
+    padding: 8,
+    marginRight: 5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginBottom: 5,
   },
   sendButton: {
     width: 44,
@@ -294,5 +454,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 10,
+  },
+  imageModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullScreenImage: {
+    width: "100%",
+    height: "100%",
+  },
+  closeModalButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 2,
+    padding: 10,
   },
 });

@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
@@ -276,11 +276,9 @@ export default function Logs() {
         </View>
 
         {loading ? (
-          <ActivityIndicator
-            size="large"
-            color="#4DA8DA"
-            style={{ marginTop: 50 }}
-          />
+          <View style={{ marginTop: 50 }}>
+            <CustomLoader text="Loglar Yükleniyor..." />
+          </View>
         ) : (
           <FlatList
             data={filteredLogs}

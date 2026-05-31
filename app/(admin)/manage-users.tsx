@@ -2,30 +2,30 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
 } from "firebase/firestore";
 import { deleteObject, ref } from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
+import CustomModal from "../../components/CustomModal";
 import { auth, db, storage } from "../../firebaseConfig";
 
 interface AdminUserData {
@@ -244,11 +244,9 @@ export default function ManageUsers() {
         </View>
 
         {loading ? (
-          <ActivityIndicator
-            size="large"
-            color="#4DA8DA"
-            style={{ marginTop: 50 }}
-          />
+          <View style={{ marginTop: 50 }}>
+            <CustomLoader text="Kullanıcılar Yükleniyor..." />
+          </View>
         ) : (
           <FlatList
             data={filteredUsers}
@@ -263,44 +261,24 @@ export default function ManageUsers() {
       </SafeAreaView>
 
       {/* Kullanıcı Silme Modalı */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      <CustomModal
         visible={deleteModalVisible}
-        onRequestClose={() => setDeleteModalVisible(false)}
+        title="Kullanıcıyı Sil"
+        message={`"${userToDelete?.name}" isimli kullanıcının profilini silmek üzeresiniz. Lütfen silme nedenini belirtin:`}
+        type="error"
+        buttonText="Sil"
+        onClose={confirmDeleteUser}
+        onCancel={() => setDeleteModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Kullanıcıyı Sil</Text>
-            <Text style={styles.modalText}>
-              "{userToDelete?.name}" isimli kullanıcının profilini silmek
-              üzeresiniz. Lütfen silme nedenini belirtin:
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Silme nedeni (Spam, kural ihlali vb.)"
-              placeholderTextColor="#999"
-              value={deleteReason}
-              onChangeText={setDeleteReason}
-              multiline
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setDeleteModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>İptal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButton]}
-                onPress={confirmDeleteUser}
-              >
-                <Text style={styles.modalButtonText}>Sil</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <TextInput
+          style={styles.modalInput}
+          placeholder="Silme nedeni (Spam, kural ihlali vb.)"
+          placeholderTextColor="#999"
+          value={deleteReason}
+          onChangeText={setDeleteReason}
+          multiline
+        />
+      </CustomModal>
     </View>
   );
 }
@@ -373,28 +351,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 40,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: "#162b35",
-    borderRadius: 15,
-    width: "100%",
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "rgba(77, 168, 218, 0.4)",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-  },
-  modalText: { fontSize: 14, color: "#ccc", marginBottom: 15, lineHeight: 20 },
   modalInput: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
@@ -405,9 +361,4 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     marginBottom: 20,
   },
-  modalButtons: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
-  modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
-  cancelButton: { backgroundColor: "rgba(255, 255, 255, 0.1)" },
-  deleteButton: { backgroundColor: "#ff4d4d" },
-  modalButtonText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
 });

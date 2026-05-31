@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   arrayRemove,
   arrayUnion,
@@ -9,7 +10,7 @@ import {
   onSnapshot,
   orderBy,
   query,
-  updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -25,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
@@ -35,6 +37,9 @@ export interface Job {
   location: string;
   type?: string;
   workModel?: string;
+  experience?: string;
+  salaryRange?: { min: string; max: string };
+  skills?: string[];
   description?: string;
   employerId: string;
   createdAt?: any;
@@ -113,7 +118,32 @@ const JobCardItem = memo(
             <Text style={styles.detailText}>{item.workModel}</Text>
           </View>
         ) : null}
+        {item.salaryRange && (item.salaryRange.min || item.salaryRange.max) ? (
+          <View style={styles.detailItem}>
+            <Ionicons name="cash-outline" size={14} color="#ccc" />
+            <Text style={styles.detailText}>
+              {item.salaryRange.min ? `${item.salaryRange.min} ₺` : ""}
+              {item.salaryRange.min && item.salaryRange.max ? " - " : ""}
+              {item.salaryRange.max ? `${item.salaryRange.max} ₺` : ""}
+            </Text>
+          </View>
+        ) : null}
       </View>
+
+      {item.skills && item.skills.length > 0 && (
+        <View style={styles.skillsRow}>
+          {item.skills.slice(0, 3).map((skill, index) => (
+            <View key={index} style={styles.miniSkillChip}>
+              <Text style={styles.miniSkillText}>{skill}</Text>
+            </View>
+          ))}
+          {item.skills.length > 3 && (
+            <Text style={styles.extraSkillsText}>
+              +{item.skills.length - 3}
+            </Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.jobFooter}>
         <View style={styles.tagsContainer}>
@@ -183,27 +213,36 @@ export default function Jobs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [displayedCount, setDisplayedCount] = useState(10);
 
   useEffect(() => {
-    if (auth.currentUser) {
-      const userRef = doc(db, "users", auth.currentUser.uid);
-      const unsubUser = onSnapshot(
-        userRef,
-        (docSnap) => {
-          if (docSnap.exists()) {
-            setSavedJobIds(docSnap.data().savedJobs || []);
-            setAppliedJobIds(docSnap.data().appliedJobs || []);
-          }
-        },
-        (error) => {
-          if (error.code !== "permission-denied") {
-            console.error("Kullanıcı verisi dinlenirken hata:", error);
-          }
-        },
-      );
-      return () => unsubUser();
-    }
+    let unsubUser: (() => void) | undefined;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        unsubUser = onSnapshot(
+          userRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setSavedJobIds(docSnap.data().savedJobs || []);
+              setAppliedJobIds(docSnap.data().appliedJobs || []);
+            }
+          },
+          (error) => {
+            if (error.code !== "permission-denied") {
+              console.error("Kullanıcı verisi dinlenirken hata:", error);
+            }
+          },
+        );
+      } else {
+        if (unsubUser) unsubUser();
+      }
+    });
+    return () => {
+      unsubscribeAuth();
+      if (unsubUser) unsubUser();
+    };
   }, []);
 
   useEffect(() => {
@@ -313,8 +352,12 @@ export default function Jobs() {
       const jobRef = doc(db, "jobs", jobId);
       try {
         await Promise.all([
-          updateDoc(userRef, { appliedJobs: arrayUnion(jobId) }),
-          updateDoc(jobRef, { applicants: arrayUnion(auth.currentUser.uid) }),
+          setDoc(userRef, { appliedJobs: arrayUnion(jobId) }, { merge: true }),
+          setDoc(
+            jobRef,
+            { applicants: arrayUnion(auth.currentUser.uid) },
+            { merge: true },
+          ),
         ]);
 
         if (Platform.OS === "web") {
@@ -351,8 +394,12 @@ export default function Jobs() {
       const jobRef = doc(db, "jobs", jobId);
       try {
         await Promise.all([
-          updateDoc(userRef, { appliedJobs: arrayRemove(jobId) }),
-          updateDoc(jobRef, { applicants: arrayRemove(auth.currentUser.uid) }),
+          setDoc(userRef, { appliedJobs: arrayRemove(jobId) }, { merge: true }),
+          setDoc(
+            jobRef,
+            { applicants: arrayRemove(auth.currentUser.uid) },
+            { merge: true },
+          ),
         ]);
 
         if (Platform.OS === "web") {
@@ -386,9 +433,13 @@ export default function Jobs() {
     if (!auth.currentUser) return;
     const userRef = doc(db, "users", auth.currentUser.uid);
     try {
-      await updateDoc(userRef, {
-        savedJobs: isSaved ? arrayRemove(jobId) : arrayUnion(jobId),
-      });
+      await setDoc(
+        userRef,
+        {
+          savedJobs: isSaved ? arrayRemove(jobId) : arrayUnion(jobId),
+        },
+        { merge: true },
+      );
     } catch (error) {
       console.error("İlan kaydedilirken hata:", error);
     }
@@ -424,11 +475,7 @@ export default function Jobs() {
   );
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen />;
   }
 
   return (
@@ -477,7 +524,12 @@ export default function Jobs() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchContainer}>
+        <View
+          style={[
+            styles.searchContainer,
+            isSearchFocused && styles.inputFocused,
+          ]}
+        >
           <Ionicons
             name="search-outline"
             size={20}
@@ -490,6 +542,8 @@ export default function Jobs() {
             placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
@@ -510,8 +564,8 @@ export default function Jobs() {
           windowSize={5}
           updateCellsBatchingPeriod={50}
           getItemLayout={(_, index) => ({
-            length: 140, // Ortalama ilan kartı yüksekliği
-            offset: 140 * index,
+            length: 160, // Ortalama ilan kartı yüksekliği (Yetenek ve maaş için artırıldı)
+            offset: 160 * index,
             index,
           })}
           onEndReached={handleLoadMore}
@@ -605,6 +659,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 10,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   searchIcon: { marginRight: 10 },
   searchInput: {
@@ -614,13 +670,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   clearIcon: { marginLeft: 10, padding: 5 },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+  inputFocused: {
+    borderColor: "#4DA8DA",
   },
-  text: { color: "#aaa", fontSize: 18, marginTop: 20, textAlign: "center" },
   listContainer: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -672,6 +724,27 @@ const styles = StyleSheet.create({
   detailText: {
     color: "#ccc",
     fontSize: 13,
+    marginLeft: 4,
+  },
+  skillsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+    gap: 6,
+  },
+  miniSkillChip: {
+    backgroundColor: "rgba(77, 168, 218, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(77, 168, 218, 0.3)",
+  },
+  miniSkillText: { color: "#4DA8DA", fontSize: 11, fontWeight: "600" },
+  extraSkillsText: {
+    color: "#aaa",
+    fontSize: 12,
     marginLeft: 4,
   },
   jobFooter: {

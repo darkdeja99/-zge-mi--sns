@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import {
     collection,
     doc,
@@ -12,7 +13,6 @@ import {
 } from "firebase/firestore";
 import { memo, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
     FlatList,
     StyleSheet,
     Text,
@@ -20,6 +20,7 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
@@ -108,47 +109,47 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    let unsubscribeChats: (() => void) | undefined;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const chatsRef = collection(db, "chats");
+        const q = query(
+          chatsRef,
+          where("participants", "array-contains", user.uid),
+          orderBy("lastMessageTime", "desc"),
+        );
 
-    const chatsRef = collection(db, "chats");
-    const q = query(
-      chatsRef,
-      where("participants", "array-contains", auth.currentUser.uid),
-      orderBy("lastMessageTime", "desc"),
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const chatsList: Chat[] = [];
-        snapshot.forEach((doc) => {
-          chatsList.push({ id: doc.id, ...doc.data() } as Chat);
-        });
-        setChats(chatsList);
+        unsubscribeChats = onSnapshot(
+          q,
+          (snapshot) => {
+            const chatsList: Chat[] = [];
+            snapshot.forEach((doc) => {
+              chatsList.push({ id: doc.id, ...doc.data() } as Chat);
+            });
+            setChats(chatsList);
+            setLoading(false);
+          },
+          (error) => {
+            if (error.code !== "permission-denied") {
+              console.error("Sohbetler dinlenirken hata:", error);
+            }
+            setLoading(false);
+          },
+        );
+      } else {
+        if (unsubscribeChats) unsubscribeChats();
         setLoading(false);
-      },
-      (error) => {
-        if (error.code !== "permission-denied") {
-          console.error("Sohbetler dinlenirken hata:", error);
-        }
-        setLoading(false);
-      },
-    );
+      }
+    });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeChats) unsubscribeChats();
+    };
   }, []);
 
   if (loading) {
-    return (
-      <View
-        style={[
-          styles.background,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <ActivityIndicator size="large" color="#4DA8DA" />
-      </View>
-    );
+    return <CustomLoader fullScreen text="Sohbetler Yükleniyor..." />;
   }
 
   return (

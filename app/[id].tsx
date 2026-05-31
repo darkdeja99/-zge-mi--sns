@@ -14,7 +14,6 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   Modal,
@@ -27,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../components/CustomLoader";
 import ReadMoreText from "../components/ReadMoreText";
 import { db } from "../firebaseConfig";
 import { Experience, ResumeData, UserProfileData } from "../types/profile";
@@ -144,7 +144,9 @@ export default function UserProfile() {
             <style>
               body { font-family: 'Roboto', sans-serif; margin: 0; padding: 0; color: #333; line-height: 1.5; background-color: #fff; }
               .container { max-width: 800px; margin: 0 auto; padding: 40px; }
-              .header { border-bottom: 3px solid #4DA8DA; padding-bottom: 20px; margin-bottom: 30px; }
+              .header { display: flex; align-items: center; gap: 25px; border-bottom: 3px solid #4DA8DA; padding-bottom: 20px; margin-bottom: 30px; }
+              .header-info { flex: 1; }
+              .header-avatar { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #4DA8DA; }
               .name { font-size: 36px; font-weight: 700; color: #2c3e50; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; }
               .headline { font-size: 18px; font-weight: 400; color: #4DA8DA; margin: 0 0 15px 0; }
               .contact-info { display: flex; flex-wrap: wrap; gap: 15px; font-size: 13px; color: #555; }
@@ -166,12 +168,15 @@ export default function UserProfile() {
           <body>
             <div class="container">
               <div class="header">
-                <h1 class="name">${profile?.name} ${profile?.surname}</h1>
-                ${profile?.headline ? `<p class="headline">${profile.headline}</p>` : ""}
-                <div class="contact-info">
-                  ${profile?.email ? `<span class="contact-item">✉ ${profile.email}</span>` : ""}
-                  ${profile?.phoneNumber ? `<span class="contact-item">☏ ${profile.phoneNumber}</span>` : ""}
-                  ${profile?.location ? `<span class="contact-item">📍 ${profile.location}</span>` : ""}
+                ${profile?.photoURL ? `<img src="${profile.photoURL}" class="header-avatar" />` : ""}
+                <div class="header-info">
+                  <h1 class="name">${profile?.name} ${profile?.surname}</h1>
+                  ${profile?.headline ? `<p class="headline">${profile.headline}</p>` : ""}
+                  <div class="contact-info">
+                    ${profile?.email ? `<span class="contact-item">✉ ${profile.email}</span>` : ""}
+                    ${profile?.phoneNumber ? `<span class="contact-item">☏ ${profile.phoneNumber}</span>` : ""}
+                    ${profile?.location ? `<span class="contact-item">📍 ${profile.location}</span>` : ""}
+                  </div>
                 </div>
               </div>
 
@@ -269,7 +274,15 @@ export default function UserProfile() {
                     ? `<div class="section">
                         <h2 class="section-title">Yetenekler</h2>
                         <div class="skills-container">
-                          ${resume.skills.map((skill) => `<span class="skill-badge">${skill}</span>`).join("")}
+                          ${resume.skills
+                            .map((skill: any) => {
+                              const isObj = typeof skill === "object";
+                              const skillName = isObj ? skill.name : skill;
+                              const skillLevel =
+                                isObj && skill.level ? ` (${skill.level})` : "";
+                              return `<span class="skill-badge">${skillName}${skillLevel}</span>`;
+                            })
+                            .join("")}
                         </div>
                       </div>`
                     : ""
@@ -365,11 +378,7 @@ export default function UserProfile() {
   };
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen text="Kullanıcı Profili Yükleniyor..." />;
   }
 
   if (!profile) {
@@ -641,18 +650,27 @@ export default function UserProfile() {
                 <Text style={styles.sectionTitle}>Yetenekler</Text>
                 <View style={styles.skillsContainer}>
                   {resume.skills && resume.skills.length > 0 ? (
-                    resume.skills.map((skill, index) => (
-                      <View key={index} style={styles.skillBadge}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={14}
-                          color="#fff"
-                        />
-                        <Text style={[styles.skillText, { marginLeft: 4 }]}>
-                          {skill}
-                        </Text>
-                      </View>
-                    ))
+                    resume.skills.map((skill: any, index) => {
+                      const skillName =
+                        typeof skill === "object" ? skill.name : skill;
+                      const skillLevel =
+                        typeof skill === "object" && skill.level
+                          ? ` - ${skill.level}`
+                          : "";
+                      return (
+                        <View key={index} style={styles.skillBadge}>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={14}
+                            color="#fff"
+                          />
+                          <Text style={[styles.skillText, { marginLeft: 4 }]}>
+                            {skillName}
+                            {skillLevel}
+                          </Text>
+                        </View>
+                      );
+                    })
                   ) : (
                     <Text style={styles.sectionContent}>
                       Yetenek eklenmemiş.

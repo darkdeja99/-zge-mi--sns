@@ -3,18 +3,17 @@ import { Link, router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRef, useState } from "react";
 import {
-  Alert,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    Dimensions,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../firebaseConfig";
 
@@ -23,6 +22,8 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  const passwordRef = useRef<TextInput>(null);
 
   // Animasyon değerini tutan referans
   const shakeAnimation = useRef(new Animated.Value(0)).current;
@@ -65,99 +66,97 @@ export default function SignIn() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Giriş Yap</Text>
-            <Animated.View
-              style={[
-                styles.formContainer,
-                { transform: [{ translateX: shakeAnimation }] },
-              ]}
-            >
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color={focusedInput === "email" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  onFocus={() => setFocusedInput("email")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="E-posta"
-                  placeholderTextColor="#aaa"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={focusedInput === "password" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Şifre"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showPassword}
-                  returnKeyType="go"
-                  onSubmitEditing={handleSignIn}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
-              <Link href="/forgot-password" asChild>
-                <TouchableOpacity style={styles.forgotPasswordButton}>
-                  <Text style={styles.forgotPasswordText}>
-                    Şifremi Unuttum?
-                  </Text>
-                </TouchableOpacity>
-              </Link>
-              <TouchableOpacity style={styles.button} onPress={handleSignIn}>
-                <Text style={styles.buttonText}>Giriş Yap</Text>
-              </TouchableOpacity>
-            </Animated.View>
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Hesabın yok mu? </Text>
-              <Link href="/sign-up" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.link}>Kayıt Ol</Text>
-                </TouchableOpacity>
-              </Link>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Giriş Yap</Text>
+          <Animated.View
+            style={[
+              styles.formContainer,
+              { transform: [{ translateX: shakeAnimation }] },
+            ]}
+          >
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={focusedInput === "email" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="E-posta"
+                placeholderTextColor="#aaa"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={focusedInput === "password" ? "#007AFF" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={passwordRef}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedInput("password")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Şifre"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showPassword}
+                returnKeyType="go"
+                onSubmitEditing={handleSignIn}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
+              </TouchableOpacity>
+            </View>
+            <Link href="/forgot-password" asChild>
+              <TouchableOpacity style={styles.forgotPasswordButton}>
+                <Text style={styles.forgotPasswordText}>Şifremi Unuttum?</Text>
+              </TouchableOpacity>
+            </Link>
+            <TouchableOpacity style={styles.button} onPress={handleSignIn}>
+              <Text style={styles.buttonText}>Giriş Yap</Text>
+            </TouchableOpacity>
+          </Animated.View>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Hesabın yok mu? </Text>
+            <Link href="/sign-up" asChild>
+              <TouchableOpacity>
+                <Text style={styles.link}>Kayıt Ol</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </View>
   );

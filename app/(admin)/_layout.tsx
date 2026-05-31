@@ -2,7 +2,7 @@ import { Stack, router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
 
 export default function AdminLayout() {
@@ -37,18 +37,7 @@ export default function AdminLayout() {
   }, []);
 
   if (isAdmin === null) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#0f2027",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#4DA8DA" />
-      </View>
-    );
+    return <CustomLoader fullScreen text="Yetki Kontrol Ediliyor..." />;
   }
 
   return (

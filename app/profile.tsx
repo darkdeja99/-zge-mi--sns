@@ -5,7 +5,6 @@ import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   LayoutAnimation,
@@ -19,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../components/CustomLoader";
 import ReadMoreText from "../components/ReadMoreText";
 import { auth, db } from "../firebaseConfig";
 import { Experience, UserProfileData } from "../types/profile";
@@ -146,16 +146,7 @@ export default function Profile() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.background}>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.container}>
-            <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingText}>Yükleniyor...</Text>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
+    return <CustomLoader fullScreen text="Profil Yükleniyor..." />;
   }
 
   return (
@@ -544,20 +535,45 @@ export default function Profile() {
                       <View style={styles.skillsContainer}>
                         {userProfile?.skills &&
                         userProfile.skills.length > 0 ? (
-                          userProfile.skills.map((skill, index) => (
-                            <View key={index} style={styles.skillBadge}>
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={14}
-                                color="#fff"
-                              />
-                              <Text
-                                style={[styles.skillText, { marginLeft: 4 }]}
+                          userProfile.skills.map((skill: any, index) => {
+                            const isObj = typeof skill === "object";
+                            const skillName = isObj ? skill.name : skill;
+                            const skillLevel = isObj ? skill.level : "Orta"; // Varsayılan eski yapı
+
+                            let levelPercent = "60%";
+                            if (skillLevel === "Başlangıç")
+                              levelPercent = "20%";
+                            else if (skillLevel === "Temel")
+                              levelPercent = "40%";
+                            else if (skillLevel === "İleri")
+                              levelPercent = "80%";
+                            else if (skillLevel === "Uzman")
+                              levelPercent = "100%";
+
+                            return (
+                              <View
+                                key={index}
+                                style={styles.skillProgressContainer}
                               >
-                                {skill}
-                              </Text>
-                            </View>
-                          ))
+                                <View style={styles.skillProgressHeader}>
+                                  <Text style={styles.skillProgressName}>
+                                    {skillName}
+                                  </Text>
+                                  <Text style={styles.skillProgressLevel}>
+                                    {skillLevel}
+                                  </Text>
+                                </View>
+                                <View style={styles.skillProgressBarBackground}>
+                                  <View
+                                    style={[
+                                      styles.skillProgressBarFill,
+                                      { width: levelPercent as any },
+                                    ]}
+                                  />
+                                </View>
+                              </View>
+                            );
+                          })
                         ) : (
                           <Text style={styles.sectionContent}>
                             Yetenek eklenmemiş.
@@ -788,11 +804,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
   },
-  loadingText: {
-    color: "#fff",
-    marginTop: 10,
-    fontSize: 18,
-  },
   profileInfoContainer: {
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.1)",
@@ -878,16 +889,41 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginTop: 5,
   },
-  skillsContainer: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  skillBadge: {
-    backgroundColor: "#007AFF",
-    borderRadius: 15,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+  skillsContainer: {
+    flexDirection: "column",
+    gap: 15,
+    marginTop: 10,
+  },
+  skillProgressContainer: {
+    width: "100%",
+  },
+  skillProgressHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
     alignItems: "center",
   },
-  skillText: { color: "#fff", fontSize: 14 },
+  skillProgressName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  skillProgressLevel: {
+    color: "#4DA8DA",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+  skillProgressBarBackground: {
+    height: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  skillProgressBarFill: {
+    height: "100%",
+    backgroundColor: "#4DA8DA",
+    borderRadius: 3,
+  },
   experienceCard: {
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.2)",

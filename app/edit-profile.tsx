@@ -3,29 +3,30 @@ import { Picker } from "@react-native-picker/picker";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, useNavigation } from "expo-router";
-import { updateProfile } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { updateProfile, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   deleteObject,
   getDownloadURL,
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../components/CustomLoader";
+import CustomModal from "../components/CustomModal";
 import { auth, db, storage } from "../firebaseConfig";
 
 const provinces = [
@@ -126,14 +127,21 @@ export default function EditProfile() {
   const [saving, setSaving] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [initialState, setInitialState] = useState<any>(null);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const isSavedRef = useRef(false);
+
+  const surnameRef = useRef<TextInput>(null);
 
   const navigation = useNavigation();
 
   useEffect(() => {
-    // Load initial user data
-    const loadUserData = async () => {
-      const user = auth.currentUser;
-      if (user) {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        router.replace("/sign-in");
+        return;
+      }
+
+      const loadUserData = async () => {
         let initialVals = {
           name: "",
           surname: "",
@@ -186,15 +194,17 @@ export default function EditProfile() {
         setPhoneNumber(initialVals.phoneNumber);
 
         setInitialState(initialVals);
-      }
+      };
       setLoading(false);
-    };
+      loadUserData();
+    });
 
-    loadUserData();
+    return () => unsubscribeAuth();
   }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (isSavedRef.current) return;
       if (!initialState) return;
 
       const hasUnsavedChanges =
@@ -215,18 +225,27 @@ export default function EditProfile() {
       // Çıkış işlemini geçici olarak durdur
       e.preventDefault();
 
-      Alert.alert(
-        "Kaydedilmemiş Değişiklikler",
-        "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
-        [
-          { text: "İptal", style: "cancel", onPress: () => {} },
-          {
-            text: "Çık",
-            style: "destructive",
-            onPress: () => navigation.dispatch(e.data.action),
-          },
-        ],
-      );
+      if (Platform.OS === "web") {
+        const confirmed = window.confirm(
+          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?"
+        );
+        if (confirmed) {
+          navigation.dispatch(e.data.action);
+        }
+      } else {
+        Alert.alert(
+          "Kaydedilmemiş Değişiklikler",
+          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
+          [
+            { text: "İptal", style: "cancel", onPress: () => {} },
+            {
+              text: "Çık",
+              style: "destructive",
+              onPress: () => navigation.dispatch(e.data.action),
+            },
+          ],
+        );
+      }
     });
   }, [
     navigation,
@@ -369,15 +388,19 @@ export default function EditProfile() {
 
       // 3. Update Firestore document
       const userDocRef = doc(db, "users", user.uid);
-      await updateDoc(userDocRef, {
-        name: name,
-        surname: surname,
-        location: location,
-        gender: gender,
-        birthDate: finalBirthDate,
-        phoneNumber: phoneNumber,
-        photoURL: newPhotoURL, // Also save URL to firestore
-      });
+      await setDoc(
+        userDocRef,
+        {
+          name: name,
+          surname: surname,
+          location: location,
+          gender: gender,
+          birthDate: finalBirthDate,
+          phoneNumber: phoneNumber,
+          photoURL: newPhotoURL, // Also save URL to firestore
+        },
+        { merge: true },
+      );
 
       // Kaydetme başarılı olduğunda initialState'i güncelliyoruz
       // Bu sayede çıkış yaparken uyarı çıkmasını önlüyoruz.
@@ -394,9 +417,13 @@ export default function EditProfile() {
       });
       setImageUri(newPhotoURL);
 
-      Alert.alert("Başarılı", "Profiliniz başarıyla güncellendi.", [
-        { text: "Tamam", onPress: () => router.back() },
-      ]);
+      isSavedRef.current = true;
+      setSuccessModalVisible(true);
+
+      setTimeout(() => {
+        setSuccessModalVisible(false);
+        router.replace("/profile");
+      }, 1500);
     } catch (error: any) {
       console.error("Profil güncelleme hatası: ", error);
       Alert.alert("Hata", "Profil güncellenirken bir sorun oluştu.");
@@ -406,247 +433,304 @@ export default function EditProfile() {
   };
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen />;
   }
 
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Profili Düzenle</Text>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Profili Düzenle</Text>
 
-            <TouchableOpacity onPress={pickImage}>
-              <Image
-                source={
-                  imageUri
-                    ? { uri: imageUri }
-                    : require("../assets/default-avatar.png")
-                }
-                style={styles.avatar}
-                contentFit="cover"
-                transition={200}
-                cachePolicy="disk"
-              />
-              <View style={styles.cameraIconContainer}>
-                <Ionicons name="camera" size={24} color="white" />
-              </View>
-            </TouchableOpacity>
-
-            {imageUri && (
-              <TouchableOpacity
-                style={styles.removePhotoButton}
-                onPress={() => setImageUri(null)}
-              >
-                <Text style={styles.removePhotoText}>Fotoğrafı Kaldır</Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={focusedInput === "name" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  onFocus={() => setFocusedInput("name")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Ad"
-                  placeholderTextColor="#aaa"
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={focusedInput === "surname" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={surname}
-                  onChangeText={setSurname}
-                  onFocus={() => setFocusedInput("surname")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Soyad"
-                  placeholderTextColor="#aaa"
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={styles.datePickerContainer}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={20}
-                  color="#555"
-                  style={styles.inputIcon}
-                />
-                <View style={styles.datePickersRow}>
-                  <Picker
-                    selectedValue={birthDay}
-                    onValueChange={(itemValue) => setBirthDay(itemValue)}
-                    style={styles.datePicker}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Gün" value="" color="#aaa" />
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                      const dayStr = day.toString().padStart(2, "0");
-                      return (
-                        <Picker.Item
-                          key={dayStr}
-                          label={dayStr}
-                          value={dayStr}
-                        />
-                      );
-                    })}
-                  </Picker>
-                  <Picker
-                    selectedValue={birthMonth}
-                    onValueChange={(itemValue) => setBirthMonth(itemValue)}
-                    style={styles.datePicker}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Ay" value="" color="#aaa" />
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(
-                      (month) => {
-                        const monthStr = month.toString().padStart(2, "0");
-                        return (
-                          <Picker.Item
-                            key={monthStr}
-                            label={monthStr}
-                            value={monthStr}
-                          />
-                        );
-                      },
-                    )}
-                  </Picker>
-                  <Picker
-                    selectedValue={birthYear}
-                    onValueChange={(itemValue) => setBirthYear(itemValue)}
-                    style={styles.datePickerYear}
-                    dropdownIconColor="#555"
-                  >
-                    <Picker.Item label="Yıl" value="" color="#aaa" />
-                    {Array.from(
-                      { length: 100 },
-                      (_, i) => new Date().getFullYear() - i,
-                    ).map((year) => {
-                      const yearStr = year.toString();
-                      return (
-                        <Picker.Item
-                          key={yearStr}
-                          label={yearStr}
-                          value={yearStr}
-                        />
-                      );
-                    })}
-                  </Picker>
-                </View>
-              </View>
-              <View style={styles.pickerContainer}>
-                <Ionicons
-                  name="male-female-outline"
-                  size={20}
-                  color={focusedInput === "gender" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <Picker
-                  selectedValue={gender}
-                  onValueChange={(itemValue) => setGender(itemValue)}
-                  style={styles.picker}
-                  onFocus={() => setFocusedInput("gender")}
-                  onBlur={() => setFocusedInput(null)}
-                >
-                  <Picker.Item label="Cinsiyet Seçiniz" value="" color="#aaa" />
-                  <Picker.Item label="Kadın" value="Kadın" />
-                  <Picker.Item label="Erkek" value="Erkek" />
-                  <Picker.Item
-                    label="Belirtmek İstemiyorum"
-                    value="Belirtmek İstemiyorum"
-                  />
-                </Picker>
-              </View>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="call-outline"
-                  size={20}
-                  color={focusedInput === "phoneNumber" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  onFocus={() => setFocusedInput("phoneNumber")}
-                  onBlur={() => setFocusedInput(null)}
-                  style={styles.input}
-                  placeholder="Telefon Numarası"
-                  placeholderTextColor="#aaa"
-                  keyboardType="phone-pad"
-                />
-              </View>
-              <View style={styles.pickerContainer}>
-                <Ionicons
-                  name="location-outline"
-                  size={20}
-                  color={focusedInput === "location" ? "#007AFF" : "#555"}
-                  style={styles.inputIcon}
-                />
-                <Picker
-                  selectedValue={location}
-                  onValueChange={(itemValue) => setLocation(itemValue)}
-                  style={styles.picker}
-                  onFocus={() => setFocusedInput("location")}
-                  onBlur={() => setFocusedInput(null)}
-                >
-                  <Picker.Item label="Konum Seçiniz" value="" color="#aaa" />
-                  {provinces.map((province) => (
-                    <Picker.Item
-                      key={province}
-                      label={province}
-                      value={province}
-                    />
-                  ))}
-                </Picker>
-              </View>
-              <TouchableOpacity
-                style={[styles.button, saving && styles.buttonDisabled]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Kaydet</Text>
-                )}
-              </TouchableOpacity>
+          <TouchableOpacity onPress={pickImage}>
+            <Image
+              source={
+                imageUri
+                  ? { uri: imageUri }
+                  : require("../assets/default-avatar.png")
+              }
+              style={styles.avatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="disk"
+            />
+            <View style={styles.cameraIconContainer}>
+              <Ionicons name="camera" size={24} color="white" />
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </TouchableOpacity>
+
+          {imageUri && (
+            <TouchableOpacity
+              style={styles.removePhotoButton}
+              onPress={() => setImageUri(null)}
+            >
+              <Text style={styles.removePhotoText}>Fotoğrafı Kaldır</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.formContainer}>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "name" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={focusedInput === "name" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                onFocus={() => setFocusedInput("name")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Ad"
+                placeholderTextColor="#aaa"
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={() => surnameRef.current?.focus()}
+              />
+            </View>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "surname" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={focusedInput === "surname" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                ref={surnameRef}
+                value={surname}
+                onChangeText={setSurname}
+                onFocus={() => setFocusedInput("surname")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Soyad"
+                placeholderTextColor="#aaa"
+                autoCapitalize="words"
+              />
+            </View>
+            <View
+              style={[
+                styles.datePickerContainer,
+                focusedInput === "birthDate" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={20}
+                color={focusedInput === "birthDate" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <View style={styles.datePickersRow}>
+                <Picker
+                  selectedValue={birthDay}
+                  onValueChange={(itemValue) => setBirthDay(itemValue)}
+                  style={styles.datePicker}
+                  onFocus={() => setFocusedInput("birthDate")}
+                  onBlur={() => setFocusedInput(null)}
+                  dropdownIconColor="#4DA8DA"
+                >
+                  <Picker.Item label="Gün" value="" color="#aaa" />
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                    const dayStr = day.toString().padStart(2, "0");
+                    return (
+                      <Picker.Item
+                        key={dayStr}
+                        label={dayStr}
+                        value={dayStr}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
+                    );
+                  })}
+                </Picker>
+                <Picker
+                  selectedValue={birthMonth}
+                  onValueChange={(itemValue) => setBirthMonth(itemValue)}
+                  style={styles.datePicker}
+                  onFocus={() => setFocusedInput("birthDate")}
+                  onBlur={() => setFocusedInput(null)}
+                  dropdownIconColor="#4DA8DA"
+                >
+                  <Picker.Item label="Ay" value="" color="#aaa" />
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+                    const monthStr = month.toString().padStart(2, "0");
+                    return (
+                      <Picker.Item
+                        key={monthStr}
+                        label={monthStr}
+                        value={monthStr}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
+                    );
+                  })}
+                </Picker>
+                <Picker
+                  selectedValue={birthYear}
+                  onValueChange={(itemValue) => setBirthYear(itemValue)}
+                  style={styles.datePickerYear}
+                  onFocus={() => setFocusedInput("birthDate")}
+                  onBlur={() => setFocusedInput(null)}
+                  dropdownIconColor="#4DA8DA"
+                >
+                  <Picker.Item label="Yıl" value="" color="#aaa" />
+                  {Array.from(
+                    { length: 100 },
+                    (_, i) => new Date().getFullYear() - i,
+                  ).map((year) => {
+                    const yearStr = year.toString();
+                    return (
+                      <Picker.Item
+                        key={yearStr}
+                        label={yearStr}
+                        value={yearStr}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
+                    );
+                  })}
+                </Picker>
+              </View>
+            </View>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "gender" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="male-female-outline"
+                size={20}
+                color={focusedInput === "gender" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <Picker
+                selectedValue={gender}
+                onValueChange={(itemValue) => setGender(itemValue)}
+                style={styles.picker}
+                onFocus={() => setFocusedInput("gender")}
+                onBlur={() => setFocusedInput(null)}
+                dropdownIconColor="#4DA8DA"
+              >
+                <Picker.Item label="Cinsiyet Seçiniz" value="" color="#aaa" />
+                <Picker.Item
+                  label="Kadın"
+                  value="Kadın"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Erkek"
+                  value="Erkek"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Belirtmek İstemiyorum"
+                  value="Belirtmek İstemiyorum"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+              </Picker>
+            </View>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "phoneNumber" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="call-outline"
+                size={20}
+                color={focusedInput === "phoneNumber" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                onFocus={() => setFocusedInput("phoneNumber")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.input}
+                placeholder="Telefon Numarası"
+                placeholderTextColor="#aaa"
+                keyboardType="phone-pad"
+                returnKeyType="done"
+              />
+            </View>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "location" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="location-outline"
+                size={20}
+                color={focusedInput === "location" ? "#4DA8DA" : "#aaa"}
+                style={styles.inputIcon}
+              />
+              <Picker
+                selectedValue={location}
+                onValueChange={(itemValue) => setLocation(itemValue)}
+                style={styles.picker}
+                onFocus={() => setFocusedInput("location")}
+                onBlur={() => setFocusedInput(null)}
+                dropdownIconColor="#4DA8DA"
+              >
+                <Picker.Item label="Konum Seçiniz" value="" color="#aaa" />
+                {provinces.map((province) => (
+                  <Picker.Item
+                    key={province}
+                    label={province}
+                    value={province}
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
+                ))}
+              </Picker>
+            </View>
+            <TouchableOpacity
+              style={[styles.button, saving && styles.buttonDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Kaydet</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
+
+      {/* Başarı Modalı */}
+      <CustomModal
+        visible={successModalVisible}
+        title="Başarılı!"
+        message="Profiliniz başarıyla güncellendi."
+        type="success"
+        onClose={() => {
+          setSuccessModalVisible(false);
+          router.replace("/profile");
+        }}
+      />
     </View>
   );
 }
@@ -661,7 +745,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 30,
     paddingTop: 80,
-    paddingBottom: 30,
+    paddingBottom: 120,
   },
   backButton: { position: "absolute", top: 40, left: 20, zIndex: 1 },
   title: {
@@ -699,10 +783,15 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginBottom: 15,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  inputContainerFocused: {
+    borderColor: "#4DA8DA",
   },
   inputIcon: {
     marginRight: 10,
@@ -711,27 +800,32 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 15,
     fontSize: 16,
-    color: "#000",
+    color: "#fff",
   },
   pickerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginBottom: 15,
     paddingLeft: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   picker: {
     height: 55,
     width: "100%",
+    ...Platform.select({ web: { color: "#000" }, default: { color: "#fff" } }),
   },
   datePickerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginBottom: 15,
     paddingLeft: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   datePickersRow: {
     flex: 1,
@@ -741,14 +835,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 55,
     marginHorizontal: -8,
+    ...Platform.select({ web: { color: "#000" }, default: { color: "#fff" } }),
   },
   datePickerYear: {
     flex: 1.3,
     height: 55,
     marginLeft: -8,
+    ...Platform.select({ web: { color: "#000" }, default: { color: "#fff" } }),
   },
   button: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#4DA8DA",
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: "center",

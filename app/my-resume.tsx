@@ -1,13 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { router, useNavigation } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,7 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../components/CustomLoader";
+import CustomModal from "../components/CustomModal";
 import { auth, db } from "../firebaseConfig";
 import {
   Certificate,
@@ -545,12 +548,38 @@ const formatYear = (text: string) => {
   return text.replace(/[^0-9]/g, "").slice(0, 4); // Sadece 4 haneli rakama izin ver
 };
 
+// Firebase'den gelen eksik/boş değerler ile UI state üzerindeki boş string/array'leri
+// eşit kabul etmek ve key sıralamasından etkilenmemek için temizleme fonksiyonu
+const sanitizeForComparison = (obj: any): any => {
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForComparison);
+  }
+  if (obj !== null && typeof obj === "object") {
+    const newObj: any = {};
+    Object.keys(obj)
+      .sort()
+      .forEach((key) => {
+        const val = obj[key];
+        if (val !== undefined && val !== null && val !== "") {
+          if (Array.isArray(val) && val.length === 0) {
+            return; // Boş diziyi atla
+          }
+          newObj[key] = sanitizeForComparison(val);
+        }
+      });
+    return newObj;
+  }
+  return obj;
+};
+
 export default function MyResume() {
+  const [user, setUser] = useState<any>(null);
   const [headline, setHeadline] = useState("");
   const [selectedHeadline, setSelectedHeadline] = useState("");
   const [summary, setSummary] = useState("");
-  const [skills, setSkills] = useState<string[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
   const [currentSkill, setCurrentSkill] = useState(""); // Input için state
+  const [currentSkillLevel, setCurrentSkillLevel] = useState(""); // Yetenek seviyesi
   const [selectedLanguage, setSelectedLanguage] = useState(""); // Dil pickeri için state
   const [currentLanguage, setCurrentLanguage] = useState(""); // Dil inputu için state
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(""); // Dil seviyesi için state
@@ -583,6 +612,8 @@ export default function MyResume() {
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [initialState, setInitialState] = useState<any>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const isSavedRef = useRef(false);
 
   const steps = [
     "Temel Bilgiler",
@@ -592,129 +623,139 @@ export default function MyResume() {
     "Sertifikalar ve Projeler",
   ];
 
-  const user = auth.currentUser;
   const navigation = useNavigation();
 
   useEffect(() => {
-    if (!user) {
-      Alert.alert("Hata", "Devam etmek için lütfen giriş yapın.");
-      router.replace("/sign-in");
-      return;
-    }
-
-    const loadData = async () => {
-      try {
-        const userDocRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userDocRef);
-
-        const userData = userSnap.exists() ? userSnap.data() : {};
-
-        const initialVals = {
-          headline: userData.headline || "",
-          summary: userData.summary || "",
-          skills: userData.skills || [],
-          experiences: userData.experiences || [],
-          highSchool: userData.highSchool || {
-            school: "",
-            fieldOfStudy: "",
-            startDate: "",
-            endDate: "",
-            gpa: "",
-          },
-          university: userData.university || {
-            school: "",
-            fieldOfStudy: "",
-            startDate: "",
-            endDate: "",
-            gpa: "",
-          },
-          languages: userData.languages || [],
-          certificates: userData.certificates || [],
-          projects: userData.projects || [],
-        };
-
-        const fetchedHeadline = initialVals.headline;
-        if (fetchedHeadline) {
-          if (jobTitles.includes(fetchedHeadline)) {
-            setSelectedHeadline(fetchedHeadline);
-          } else {
-            setSelectedHeadline("Diğer");
-          }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setUser(null);
+        if (Platform.OS !== "web") {
+          Alert.alert("Hata", "Devam etmek için lütfen giriş yapın.");
         }
+        router.replace("/sign-in");
+        return;
+      }
 
-        // Eski eğitim dizisi varsa ve yeni yapı boşsa içeriği taşı (Geriye Dönük Uyumluluk)
-        if (
-          !userData.highSchool &&
-          !userData.university &&
-          userData.educations &&
-          userData.educations.length > 0
-        ) {
-          initialVals.university = {
-            school: userData.educations[0].school || "",
-            fieldOfStudy:
-              userData.educations[0].fieldOfStudy ||
-              userData.educations[0].degree ||
-              "",
-            startDate: userData.educations[0].startDate || "",
-            endDate: userData.educations[0].endDate || "",
-            gpa: "",
+      setUser(user);
+      const loadData = async () => {
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userDocRef);
+
+          const userData = userSnap.exists() ? userSnap.data() : {};
+
+          const initialVals = {
+            headline: userData.headline || "",
+            summary: userData.summary || "",
+            skills: userData.skills || [],
+            experiences: userData.experiences || [],
+            highSchool: userData.highSchool || {
+              school: "",
+              fieldOfStudy: "",
+              startDate: "",
+              endDate: "",
+              gpa: "",
+            },
+            university: userData.university || {
+              school: "",
+              fieldOfStudy: "",
+              startDate: "",
+              endDate: "",
+              gpa: "",
+            },
+            languages: userData.languages || [],
+            certificates: userData.certificates || [],
+            projects: userData.projects || [],
           };
-          if (userData.educations.length > 1) {
-            initialVals.highSchool = {
-              school: userData.educations[1].school || "",
+
+          const fetchedHeadline = initialVals.headline;
+          if (fetchedHeadline) {
+            if (jobTitles.includes(fetchedHeadline)) {
+              setSelectedHeadline(fetchedHeadline);
+            } else {
+              setSelectedHeadline("Diğer");
+            }
+          }
+
+          // Eski eğitim dizisi varsa ve yeni yapı boşsa içeriği taşı (Geriye Dönük Uyumluluk)
+          if (
+            !userData.highSchool &&
+            !userData.university &&
+            userData.educations &&
+            userData.educations.length > 0
+          ) {
+            initialVals.university = {
+              school: userData.educations[0].school || "",
               fieldOfStudy:
-                userData.educations[1].fieldOfStudy ||
-                userData.educations[1].degree ||
+                userData.educations[0].fieldOfStudy ||
+                userData.educations[0].degree ||
                 "",
-              startDate: userData.educations[1].startDate || "",
-              endDate: userData.educations[1].endDate || "",
+              startDate: userData.educations[0].startDate || "",
+              endDate: userData.educations[0].endDate || "",
               gpa: "",
             };
+            if (userData.educations.length > 1) {
+              initialVals.highSchool = {
+                school: userData.educations[1].school || "",
+                fieldOfStudy:
+                  userData.educations[1].fieldOfStudy ||
+                  userData.educations[1].degree ||
+                  "",
+                startDate: userData.educations[1].startDate || "",
+                endDate: userData.educations[1].endDate || "",
+                gpa: "",
+              };
+            }
           }
-        }
 
-        // Eğer kaydedilmiş üniversite listede varsa, picker onu seçsin
-        if (initialVals.university.school) {
-          if (universities.includes(initialVals.university.school)) {
-            setSelectedUniPicker(initialVals.university.school);
-          } else {
-            setSelectedUniPicker("Diğer");
+          // Eğer kaydedilmiş üniversite listede varsa, picker onu seçsin
+          if (initialVals.university.school) {
+            if (universities.includes(initialVals.university.school)) {
+              setSelectedUniPicker(initialVals.university.school);
+            } else {
+              setSelectedUniPicker("Diğer");
+            }
           }
-        }
 
-        // Eğer kaydedilmiş bölüm listede varsa, picker onu seçsin
-        if (initialVals.university.fieldOfStudy) {
-          if (
-            universityDepartments.includes(initialVals.university.fieldOfStudy)
-          ) {
-            setSelectedUniFieldPicker(initialVals.university.fieldOfStudy);
-          } else {
-            setSelectedUniFieldPicker("Diğer");
+          // Eğer kaydedilmiş bölüm listede varsa, picker onu seçsin
+          if (initialVals.university.fieldOfStudy) {
+            if (
+              universityDepartments.includes(
+                initialVals.university.fieldOfStudy,
+              )
+            ) {
+              setSelectedUniFieldPicker(initialVals.university.fieldOfStudy);
+            } else {
+              setSelectedUniFieldPicker("Diğer");
+            }
           }
+
+          setHeadline(initialVals.headline);
+          setSummary(initialVals.summary);
+          setSkills(initialVals.skills);
+          setExperiences(initialVals.experiences);
+          setHighSchool(initialVals.highSchool);
+          setUniversity(initialVals.university);
+          setLanguages(initialVals.languages);
+          setCertificates(initialVals.certificates);
+          setProjects(initialVals.projects);
+          setInitialState(initialVals);
+        } catch (error) {
+          console.error("Veri yükleme hatası: ", error);
+        } finally {
+          setLoading(false);
         }
+      };
 
-        setHeadline(initialVals.headline);
-        setSummary(initialVals.summary);
-        setSkills(initialVals.skills);
-        setExperiences(initialVals.experiences);
-        setHighSchool(initialVals.highSchool);
-        setUniversity(initialVals.university);
-        setLanguages(initialVals.languages);
-        setCertificates(initialVals.certificates);
-        setProjects(initialVals.projects);
-        setInitialState(initialVals);
-      } catch (error) {
-        console.error("Veri yükleme hatası: ", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      loadData();
+    });
 
-    loadData();
-  }, [user]);
+    return () => unsubscribeAuth();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (isSavedRef.current) return;
       if (!initialState) return;
 
       const currentState = {
@@ -730,7 +771,8 @@ export default function MyResume() {
       };
 
       const hasUnsavedChanges =
-        JSON.stringify(initialState) !== JSON.stringify(currentState);
+        JSON.stringify(sanitizeForComparison(initialState)) !==
+        JSON.stringify(sanitizeForComparison(currentState));
 
       if (!hasUnsavedChanges) {
         return; // Değişiklik yoksa çıkışa izin ver
@@ -739,18 +781,27 @@ export default function MyResume() {
       // Çıkış işlemini geçici olarak durdur
       e.preventDefault();
 
-      Alert.alert(
-        "Kaydedilmemiş Değişiklikler",
-        "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
-        [
-          { text: "İptal", style: "cancel", onPress: () => {} },
-          {
-            text: "Çık",
-            style: "destructive",
-            onPress: () => navigation.dispatch(e.data.action),
-          },
-        ],
-      );
+      if (Platform.OS === "web") {
+        const confirmed = window.confirm(
+          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
+        );
+        if (confirmed) {
+          navigation.dispatch(e.data.action);
+        }
+      } else {
+        Alert.alert(
+          "Kaydedilmemiş Değişiklikler",
+          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
+          [
+            { text: "İptal", style: "cancel", onPress: () => {} },
+            {
+              text: "Çık",
+              style: "destructive",
+              onPress: () => navigation.dispatch(e.data.action),
+            },
+          ],
+        );
+      }
     });
 
     return unsubscribe;
@@ -820,21 +871,31 @@ export default function MyResume() {
   };
 
   const removeExperience = (index: number) => {
-    Alert.alert(
-      "Emin misiniz?",
-      "Bu iş deneyimini silmek istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Sil",
-          style: "destructive",
-          onPress: () => {
-            const newExperiences = experiences.filter((_, i) => i !== index);
-            setExperiences(newExperiences);
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Bu iş deneyimini silmek istediğinize emin misiniz?",
+      );
+      if (confirmed) {
+        const newExperiences = experiences.filter((_, i) => i !== index);
+        setExperiences(newExperiences);
+      }
+    } else {
+      Alert.alert(
+        "Emin misiniz?",
+        "Bu iş deneyimini silmek istediğinize emin misiniz?",
+        [
+          { text: "İptal", style: "cancel" },
+          {
+            text: "Sil",
+            style: "destructive",
+            onPress: () => {
+              const newExperiences = experiences.filter((_, i) => i !== index);
+              setExperiences(newExperiences);
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+    }
   };
 
   const handleAddLanguage = () => {
@@ -899,21 +960,31 @@ export default function MyResume() {
   };
 
   const removeProject = (index: number) => {
-    Alert.alert(
-      "Emin misiniz?",
-      "Bu projeyi silmek istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Sil",
-          style: "destructive",
-          onPress: () => {
-            const newProjects = projects.filter((_, i) => i !== index);
-            setProjects(newProjects);
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(
+        "Bu projeyi silmek istediğinize emin misiniz?",
+      );
+      if (confirmed) {
+        const newProjects = projects.filter((_, i) => i !== index);
+        setProjects(newProjects);
+      }
+    } else {
+      Alert.alert(
+        "Emin misiniz?",
+        "Bu projeyi silmek istediğinize emin misiniz?",
+        [
+          { text: "İptal", style: "cancel" },
+          {
+            text: "Sil",
+            style: "destructive",
+            onPress: () => {
+              const newProjects = projects.filter((_, i) => i !== index);
+              setProjects(newProjects);
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+    }
   };
 
   const handleSave = async () => {
@@ -972,9 +1043,13 @@ export default function MyResume() {
         projects,
       });
 
-      Alert.alert("Başarılı", "Özgeçmişiniz başarıyla kaydedildi.", [
-        { text: "Tamam", onPress: () => router.back() },
-      ]);
+      isSavedRef.current = true;
+      setSuccessModalVisible(true);
+
+      setTimeout(() => {
+        setSuccessModalVisible(false);
+        router.replace("/profile");
+      }, 1500);
     } catch (error) {
       console.error("Özgeçmiş kaydetme hatası: ", error);
       Alert.alert("Hata", "Özgeçmiş kaydedilirken bir sorun oluştu.");
@@ -1005,27 +1080,40 @@ export default function MyResume() {
     }
 
     suggestions = Array.from(new Set(suggestions)); // Tekilleştir
-    const currentSkills = skills.map((s) => s.toLowerCase());
+    const currentSkills = skills.map((s: any) =>
+      (typeof s === "string" ? s : s.name).toLowerCase(),
+    );
     return suggestions.filter(
       (skill) => !currentSkills.includes(skill.toLowerCase()),
     );
   };
 
-  const handleAddSuggestedSkill = (skill: string) => {
-    if (!skills.map((s) => s.toLowerCase()).includes(skill.toLowerCase())) {
-      setSkills([...skills, skill]);
+  const handleAddSuggestedSkill = (skillName: string) => {
+    const currentSkills = skills.map((s: any) =>
+      (typeof s === "string" ? s : s.name).toLowerCase(),
+    );
+    if (!currentSkills.includes(skillName.toLowerCase())) {
+      setCurrentSkill(skillName);
+      setFocusedInput("currentSkillLevel"); // Odak seviye seçiciye gitsin
     }
   };
 
   const handleAddSkill = () => {
-    if (currentSkill.trim() !== "") {
+    if (currentSkill.trim() !== "" && currentSkillLevel !== "") {
       const newSkill = currentSkill.trim();
-      if (
-        !skills.map((s) => s.toLowerCase()).includes(newSkill.toLowerCase())
-      ) {
-        setSkills([...skills, newSkill]);
+      const currentSkills = skills.map((s: any) =>
+        (typeof s === "string" ? s : s.name).toLowerCase(),
+      );
+      if (!currentSkills.includes(newSkill.toLowerCase())) {
+        setSkills([...skills, { name: newSkill, level: currentSkillLevel }]);
       }
       setCurrentSkill("");
+      setCurrentSkillLevel("");
+    } else {
+      Alert.alert(
+        "Eksik Bilgi",
+        "Lütfen bir yetenek yazın ve seviyesini seçin.",
+      );
     }
   };
 
@@ -1043,11 +1131,7 @@ export default function MyResume() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen text="Özgeçmiş Yükleniyor..." />;
   }
 
   const renderStepContent = () => {
@@ -1056,11 +1140,16 @@ export default function MyResume() {
         return (
           <>
             <Text style={styles.stepTitle}>Ünvan</Text>
-            <View style={styles.pickerContainer}>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "headlinePicker" && styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="briefcase-outline"
                 size={20}
-                color={focusedInput === "headlinePicker" ? "#007AFF" : "#555"}
+                color={focusedInput === "headlinePicker" ? "#4DA8DA" : "#aaa"}
                 style={styles.inputIcon}
               />
               <Picker
@@ -1069,25 +1158,36 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("headlinePicker")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.picker}
-                dropdownIconColor="#555"
+                dropdownIconColor="#4DA8DA"
               >
                 <Picker.Item label="Ünvan Seçiniz" value="" color="#aaa" />
                 {jobTitles.map((title) => (
-                  <Picker.Item key={title} label={title} value={title} />
+                  <Picker.Item
+                    key={title}
+                    label={title}
+                    value={title}
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 ))}
                 <Picker.Item
                   label="Diğer (Kendim Yazmak İstiyorum)"
                   value="Diğer"
+                  color={Platform.OS === "web" ? "#000" : undefined}
                 />
               </Picker>
             </View>
 
             {selectedHeadline === "Diğer" && (
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "headline" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="create-outline"
                   size={20}
-                  color={focusedInput === "headline" ? "#007AFF" : "#555"}
+                  color={focusedInput === "headline" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -1105,11 +1205,17 @@ export default function MyResume() {
             <View style={styles.divider} />
 
             <Text style={styles.stepTitle}>Hakkında</Text>
-            <View style={[styles.inputContainer, styles.textAreaContainer]}>
+            <View
+              style={[
+                styles.inputContainer,
+                styles.textAreaContainer,
+                focusedInput === "summary" && styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="information-circle-outline"
                 size={20}
-                color={focusedInput === "summary" ? "#007AFF" : "#555"}
+                color={focusedInput === "summary" ? "#4DA8DA" : "#aaa"}
                 style={[styles.inputIcon, { marginTop: 15 }]}
               />
               <TextInput
@@ -1132,11 +1238,16 @@ export default function MyResume() {
           <>
             <Text style={styles.stepTitle}>Lise</Text>
             <View style={styles.experienceContainer}>
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "hs_school" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="business-outline"
                   size={20}
-                  color={focusedInput === "hs_school" ? "#007AFF" : "#555"}
+                  color={focusedInput === "hs_school" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -1151,11 +1262,16 @@ export default function MyResume() {
                   placeholderTextColor="#aaa"
                 />
               </View>
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  focusedInput === "hs_field" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="library-outline"
                   size={20}
-                  color={focusedInput === "hs_field" ? "#007AFF" : "#555"}
+                  color={focusedInput === "hs_field" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <Picker
@@ -1166,19 +1282,36 @@ export default function MyResume() {
                   onFocus={() => setFocusedInput("hs_field")}
                   onBlur={() => setFocusedInput(null)}
                   style={styles.picker}
-                  dropdownIconColor="#555"
+                  dropdownIconColor="#4DA8DA"
                 >
                   <Picker.Item label="Bölüm Seçiniz" value="" color="#aaa" />
-                  <Picker.Item label="Sözel" value="Sözel" />
-                  <Picker.Item label="Eşit Ağırlık" value="Eşit Ağırlık" />
-                  <Picker.Item label="Sayısal" value="Sayısal" />
+                  <Picker.Item
+                    label="Sözel"
+                    value="Sözel"
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
+                  <Picker.Item
+                    label="Eşit Ağırlık"
+                    value="Eşit Ağırlık"
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
+                  <Picker.Item
+                    label="Sayısal"
+                    value="Sayısal"
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 </Picker>
               </View>
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  focusedInput === "hs_dates" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="calendar-outline"
                   size={20}
-                  color="#555"
+                  color={focusedInput === "hs_dates" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <View style={{ flex: 1, flexDirection: "row" }}>
@@ -1187,12 +1320,19 @@ export default function MyResume() {
                     onValueChange={(val) =>
                       setHighSchool({ ...highSchool, startDate: val })
                     }
+                    onFocus={() => setFocusedInput("hs_dates")}
+                    onBlur={() => setFocusedInput(null)}
                     style={[styles.picker, { flex: 1, marginHorizontal: -10 }]}
-                    dropdownIconColor="#555"
+                    dropdownIconColor="#4DA8DA"
                   >
                     <Picker.Item label="Başlangıç" value="" color="#aaa" />
                     {years.map((year) => (
-                      <Picker.Item key={year} label={year} value={year} />
+                      <Picker.Item
+                        key={year}
+                        label={year}
+                        value={year}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
                     ))}
                   </Picker>
                   <Picker
@@ -1200,22 +1340,38 @@ export default function MyResume() {
                     onValueChange={(val) =>
                       setHighSchool({ ...highSchool, endDate: val })
                     }
+                    onFocus={() => setFocusedInput("hs_dates")}
+                    onBlur={() => setFocusedInput(null)}
                     style={[styles.picker, { flex: 1, marginHorizontal: -10 }]}
-                    dropdownIconColor="#555"
+                    dropdownIconColor="#4DA8DA"
                   >
                     <Picker.Item label="Bitiş" value="" color="#aaa" />
-                    <Picker.Item label="Devam Ediyor" value="Devam Ediyor" />
+                    <Picker.Item
+                      label="Devam Ediyor"
+                      value="Devam Ediyor"
+                      color={Platform.OS === "web" ? "#000" : undefined}
+                    />
                     {years.map((year) => (
-                      <Picker.Item key={year} label={year} value={year} />
+                      <Picker.Item
+                        key={year}
+                        label={year}
+                        value={year}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
                     ))}
                   </Picker>
                 </View>
               </View>
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "hs_gpa" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="stats-chart-outline"
                   size={20}
-                  color={focusedInput === "hs_gpa" ? "#007AFF" : "#555"}
+                  color={focusedInput === "hs_gpa" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -1235,12 +1391,17 @@ export default function MyResume() {
 
             <Text style={styles.stepTitle}>Üniversite</Text>
             <View style={styles.experienceContainer}>
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  focusedInput === "uni_school_picker" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="business-outline"
                   size={20}
                   color={
-                    focusedInput === "uni_school_picker" ? "#007AFF" : "#555"
+                    focusedInput === "uni_school_picker" ? "#4DA8DA" : "#aaa"
                   }
                   style={styles.inputIcon}
                 />
@@ -1257,7 +1418,7 @@ export default function MyResume() {
                   onFocus={() => setFocusedInput("uni_school_picker")}
                   onBlur={() => setFocusedInput(null)}
                   style={styles.picker}
-                  dropdownIconColor="#555"
+                  dropdownIconColor="#4DA8DA"
                 >
                   <Picker.Item
                     label="Üniversite Seçiniz"
@@ -1265,18 +1426,32 @@ export default function MyResume() {
                     color="#aaa"
                   />
                   {universities.map((uni) => (
-                    <Picker.Item key={uni} label={uni} value={uni} />
+                    <Picker.Item
+                      key={uni}
+                      label={uni}
+                      value={uni}
+                      color={Platform.OS === "web" ? "#000" : undefined}
+                    />
                   ))}
-                  <Picker.Item label="Diğer" value="Diğer" />
+                  <Picker.Item
+                    label="Diğer"
+                    value="Diğer"
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 </Picker>
               </View>
               {selectedUniPicker === "Diğer" && (
-                <View style={styles.inputContainer}>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    focusedInput === "uni_school_custom" && styles.inputFocused,
+                  ]}
+                >
                   <Ionicons
                     name="create-outline"
                     size={20}
                     color={
-                      focusedInput === "uni_school_custom" ? "#007AFF" : "#555"
+                      focusedInput === "uni_school_custom" ? "#4DA8DA" : "#aaa"
                     }
                     style={styles.inputIcon}
                   />
@@ -1293,12 +1468,17 @@ export default function MyResume() {
                   />
                 </View>
               )}
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  focusedInput === "uni_field_picker" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="library-outline"
                   size={20}
                   color={
-                    focusedInput === "uni_field_picker" ? "#007AFF" : "#555"
+                    focusedInput === "uni_field_picker" ? "#4DA8DA" : "#aaa"
                   }
                   style={styles.inputIcon}
                 />
@@ -1315,22 +1495,36 @@ export default function MyResume() {
                   onFocus={() => setFocusedInput("uni_field_picker")}
                   onBlur={() => setFocusedInput(null)}
                   style={styles.picker}
-                  dropdownIconColor="#555"
+                  dropdownIconColor="#4DA8DA"
                 >
                   <Picker.Item label="Bölüm Seçiniz" value="" color="#aaa" />
                   {universityDepartments.map((dept) => (
-                    <Picker.Item key={dept} label={dept} value={dept} />
+                    <Picker.Item
+                      key={dept}
+                      label={dept}
+                      value={dept}
+                      color={Platform.OS === "web" ? "#000" : undefined}
+                    />
                   ))}
-                  <Picker.Item label="Diğer" value="Diğer" />
+                  <Picker.Item
+                    label="Diğer"
+                    value="Diğer"
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 </Picker>
               </View>
               {selectedUniFieldPicker === "Diğer" && (
-                <View style={styles.inputContainer}>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    focusedInput === "uni_field_custom" && styles.inputFocused,
+                  ]}
+                >
                   <Ionicons
                     name="create-outline"
                     size={20}
                     color={
-                      focusedInput === "uni_field_custom" ? "#007AFF" : "#555"
+                      focusedInput === "uni_field_custom" ? "#4DA8DA" : "#aaa"
                     }
                     style={styles.inputIcon}
                   />
@@ -1347,11 +1541,16 @@ export default function MyResume() {
                   />
                 </View>
               )}
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  focusedInput === "uni_dates" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="calendar-outline"
                   size={20}
-                  color="#555"
+                  color={focusedInput === "uni_dates" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <View style={{ flex: 1, flexDirection: "row" }}>
@@ -1360,12 +1559,19 @@ export default function MyResume() {
                     onValueChange={(val) =>
                       setUniversity({ ...university, startDate: val })
                     }
+                    onFocus={() => setFocusedInput("uni_dates")}
+                    onBlur={() => setFocusedInput(null)}
                     style={[styles.picker, { flex: 1, marginHorizontal: -10 }]}
-                    dropdownIconColor="#555"
+                    dropdownIconColor="#4DA8DA"
                   >
                     <Picker.Item label="Başlangıç" value="" color="#aaa" />
                     {years.map((year) => (
-                      <Picker.Item key={year} label={year} value={year} />
+                      <Picker.Item
+                        key={year}
+                        label={year}
+                        value={year}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
                     ))}
                   </Picker>
                   <Picker
@@ -1373,22 +1579,38 @@ export default function MyResume() {
                     onValueChange={(val) =>
                       setUniversity({ ...university, endDate: val })
                     }
+                    onFocus={() => setFocusedInput("uni_dates")}
+                    onBlur={() => setFocusedInput(null)}
                     style={[styles.picker, { flex: 1, marginHorizontal: -10 }]}
-                    dropdownIconColor="#555"
+                    dropdownIconColor="#4DA8DA"
                   >
                     <Picker.Item label="Bitiş" value="" color="#aaa" />
-                    <Picker.Item label="Devam Ediyor" value="Devam Ediyor" />
+                    <Picker.Item
+                      label="Devam Ediyor"
+                      value="Devam Ediyor"
+                      color={Platform.OS === "web" ? "#000" : undefined}
+                    />
                     {years.map((year) => (
-                      <Picker.Item key={year} label={year} value={year} />
+                      <Picker.Item
+                        key={year}
+                        label={year}
+                        value={year}
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
                     ))}
                   </Picker>
                 </View>
               </View>
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "uni_gpa" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="stats-chart-outline"
                   size={20}
-                  color={focusedInput === "uni_gpa" ? "#007AFF" : "#555"}
+                  color={focusedInput === "uni_gpa" ? "#4DA8DA" : "#aaa"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -1422,14 +1644,20 @@ export default function MyResume() {
             ) : (
               experiences.map((exp, index) => (
                 <View key={index} style={styles.experienceContainer}>
-                  <View style={styles.pickerContainer}>
+                  <View
+                    style={[
+                      styles.pickerContainer,
+                      focusedInput === `exp_title_picker_${index}` &&
+                        styles.inputFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="briefcase-outline"
                       size={20}
                       color={
                         focusedInput === `exp_title_picker_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={styles.inputIcon}
                     />
@@ -1454,7 +1682,7 @@ export default function MyResume() {
                       }
                       onBlur={() => setFocusedInput(null)}
                       style={styles.picker}
-                      dropdownIconColor="#555"
+                      dropdownIconColor="#4DA8DA"
                     >
                       <Picker.Item
                         label="Pozisyon Seçiniz"
@@ -1462,20 +1690,35 @@ export default function MyResume() {
                         color="#aaa"
                       />
                       {jobTitles.map((title) => (
-                        <Picker.Item key={title} label={title} value={title} />
+                        <Picker.Item
+                          key={title}
+                          label={title}
+                          value={title}
+                          color={Platform.OS === "web" ? "#000" : undefined}
+                        />
                       ))}
-                      <Picker.Item label="Diğer" value="Diğer" />
+                      <Picker.Item
+                        label="Diğer"
+                        value="Diğer"
+                        color={Platform.OS === "web" ? "#000" : undefined}
+                      />
                     </Picker>
                   </View>
                   {!jobTitles.includes(exp.title) && exp.title !== "" && (
-                    <View style={styles.inputContainer}>
+                    <View
+                      style={[
+                        styles.inputContainer,
+                        focusedInput === `exp_title_custom_${index}` &&
+                          styles.inputFocused,
+                      ]}
+                    >
                       <Ionicons
                         name="create-outline"
                         size={20}
                         color={
                           focusedInput === `exp_title_custom_${index}`
-                            ? "#007AFF"
-                            : "#555"
+                            ? "#4DA8DA"
+                            : "#aaa"
                         }
                         style={styles.inputIcon}
                       />
@@ -1498,14 +1741,20 @@ export default function MyResume() {
                       />
                     </View>
                   )}
-                  <View style={styles.inputContainer}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedInput === `exp_company_${index}` &&
+                        styles.inputFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="business-outline"
                       size={20}
                       color={
                         focusedInput === `exp_company_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={styles.inputIcon}
                     />
@@ -1520,11 +1769,21 @@ export default function MyResume() {
                       placeholder="Şirket"
                     />
                   </View>
-                  <View style={styles.pickerContainer}>
+                  <View
+                    style={[
+                      styles.pickerContainer,
+                      focusedInput === `exp_dates_${index}` &&
+                        styles.inputFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="calendar-outline"
                       size={20}
-                      color="#555"
+                      color={
+                        focusedInput === `exp_dates_${index}`
+                          ? "#4DA8DA"
+                          : "#aaa"
+                      }
                       style={styles.inputIcon}
                     />
                     <View style={{ flex: 1, flexDirection: "row" }}>
@@ -1533,15 +1792,22 @@ export default function MyResume() {
                         onValueChange={(val) =>
                           handleExperienceChange(index, "startDate", val)
                         }
+                        onFocus={() => setFocusedInput(`exp_dates_${index}`)}
+                        onBlur={() => setFocusedInput(null)}
                         style={[
                           styles.picker,
                           { flex: 1, marginHorizontal: -10 },
                         ]}
-                        dropdownIconColor="#555"
+                        dropdownIconColor="#4DA8DA"
                       >
                         <Picker.Item label="Başlangıç" value="" color="#aaa" />
                         {years.map((year) => (
-                          <Picker.Item key={year} label={year} value={year} />
+                          <Picker.Item
+                            key={year}
+                            label={year}
+                            value={year}
+                            color={Platform.OS === "web" ? "#000" : undefined}
+                          />
                         ))}
                       </Picker>
                       <Picker
@@ -1549,33 +1815,46 @@ export default function MyResume() {
                         onValueChange={(val) =>
                           handleExperienceChange(index, "endDate", val)
                         }
+                        onFocus={() => setFocusedInput(`exp_dates_${index}`)}
+                        onBlur={() => setFocusedInput(null)}
                         style={[
                           styles.picker,
                           { flex: 1, marginHorizontal: -10 },
                         ]}
-                        dropdownIconColor="#555"
+                        dropdownIconColor="#4DA8DA"
                       >
                         <Picker.Item label="Bitiş" value="" color="#aaa" />
                         <Picker.Item
                           label="Devam Ediyor"
                           value="Devam Ediyor"
+                          color={Platform.OS === "web" ? "#000" : undefined}
                         />
                         {years.map((year) => (
-                          <Picker.Item key={year} label={year} value={year} />
+                          <Picker.Item
+                            key={year}
+                            label={year}
+                            value={year}
+                            color={Platform.OS === "web" ? "#000" : undefined}
+                          />
                         ))}
                       </Picker>
                     </View>
                   </View>
                   <View
-                    style={[styles.inputContainer, styles.textAreaContainer]}
+                    style={[
+                      styles.inputContainer,
+                      styles.textAreaContainer,
+                      focusedInput === `exp_desc_${index}` &&
+                        styles.inputFocused,
+                    ]}
                   >
                     <Ionicons
                       name="document-text-outline"
                       size={20}
                       color={
                         focusedInput === `exp_desc_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={[styles.inputIcon, { marginTop: 15 }]}
                     />
@@ -1612,21 +1891,36 @@ export default function MyResume() {
             <Text style={styles.stepTitle}>Yetenekler</Text>
             {skills.length > 0 && (
               <View style={styles.chipsContainer}>
-                {skills.map((skill, index) => (
-                  <View key={index} style={styles.chip}>
-                    <Text style={styles.chipText}>{skill}</Text>
-                    <TouchableOpacity onPress={() => removeSkill(index)}>
-                      <Ionicons name="close-circle" size={16} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+                {skills.map((skill: any, index) => {
+                  const skillName =
+                    typeof skill === "string" ? skill : skill.name;
+                  const skillLevel =
+                    typeof skill === "string" ? "" : ` (${skill.level})`;
+                  return (
+                    <View key={index} style={styles.chip}>
+                      <Text style={styles.chipText}>
+                        {skillName}
+                        {skillLevel}
+                      </Text>
+                      <TouchableOpacity onPress={() => removeSkill(index)}>
+                        <Ionicons name="close-circle" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
               </View>
             )}
-            <View style={styles.inputContainer}>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "currentSkill" && styles.inputFocused,
+                { marginBottom: 15 },
+              ]}
+            >
               <Ionicons
                 name="star-outline"
                 size={20}
-                color={focusedInput === "currentSkill" ? "#007AFF" : "#555"}
+                color={focusedInput === "currentSkill" ? "#4DA8DA" : "#aaa"}
                 style={styles.inputIcon}
               />
               <TextInput
@@ -1635,22 +1929,66 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("currentSkill")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.input}
-                placeholder="Yetenek yazıp '+' veya 'Enter'a basın"
+                placeholder="Yetenek adını yazın..."
                 placeholderTextColor="#aaa"
-                returnKeyType="done"
-                onSubmitEditing={handleAddSkill}
+                returnKeyType="next"
+                onSubmitEditing={() => setFocusedInput("currentSkillLevel")}
               />
-              <TouchableOpacity
-                onPress={handleAddSkill}
-                style={styles.addSkillButton}
-              >
-                <Ionicons
-                  name="add-circle"
-                  size={28}
-                  color={currentSkill.trim() ? "#007AFF" : "#555"}
-                />
-              </TouchableOpacity>
             </View>
+
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "currentSkillLevel" && styles.inputFocused,
+              ]}
+            >
+              <Ionicons
+                name="bar-chart-outline"
+                size={20}
+                color={
+                  focusedInput === "currentSkillLevel" ? "#4DA8DA" : "#aaa"
+                }
+                style={styles.inputIcon}
+              />
+              <Picker
+                selectedValue={currentSkillLevel}
+                onValueChange={setCurrentSkillLevel}
+                onFocus={() => setFocusedInput("currentSkillLevel")}
+                onBlur={() => setFocusedInput(null)}
+                style={styles.picker}
+                dropdownIconColor="#4DA8DA"
+              >
+                <Picker.Item label="Seviye Seçiniz" value="" color="#aaa" />
+                <Picker.Item
+                  label="Başlangıç"
+                  value="Başlangıç"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Temel"
+                  value="Temel"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Orta"
+                  value="Orta"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="İleri"
+                  value="İleri"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Uzman"
+                  value="Uzman"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+              </Picker>
+            </View>
+            <TouchableOpacity style={styles.addButton} onPress={handleAddSkill}>
+              <Text style={styles.addButtonText}>+ Yetenek Ekle</Text>
+            </TouchableOpacity>
 
             {getSuggestedSkills().length > 0 && (
               <View style={styles.suggestionsContainer}>
@@ -1692,11 +2030,16 @@ export default function MyResume() {
                 ))}
               </View>
             )}
-            <View style={styles.pickerContainer}>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "selectedLanguage" && styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="language-outline"
                 size={20}
-                color={focusedInput === "selectedLanguage" ? "#007AFF" : "#555"}
+                color={focusedInput === "selectedLanguage" ? "#4DA8DA" : "#aaa"}
                 style={styles.inputIcon}
               />
               <Picker
@@ -1705,22 +2048,36 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("selectedLanguage")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.picker}
-                dropdownIconColor="#555"
+                dropdownIconColor="#4DA8DA"
               >
                 <Picker.Item label="Dil Seçiniz" value="" color="#aaa" />
                 {commonLanguages.map((lang) => (
-                  <Picker.Item key={lang} label={lang} value={lang} />
+                  <Picker.Item
+                    key={lang}
+                    label={lang}
+                    value={lang}
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 ))}
-                <Picker.Item label="Diğer" value="Diğer" />
+                <Picker.Item
+                  label="Diğer"
+                  value="Diğer"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
               </Picker>
             </View>
             {selectedLanguage === "Diğer" && (
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "currentLanguage" && styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="create-outline"
                   size={20}
                   color={
-                    focusedInput === "currentLanguage" ? "#007AFF" : "#555"
+                    focusedInput === "currentLanguage" ? "#4DA8DA" : "#aaa"
                   }
                   style={styles.inputIcon}
                 />
@@ -1735,12 +2092,17 @@ export default function MyResume() {
                 />
               </View>
             )}
-            <View style={styles.pickerContainer}>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "currentLanguageLevel" && styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="bar-chart-outline"
                 size={20}
                 color={
-                  focusedInput === "currentLanguageLevel" ? "#007AFF" : "#555"
+                  focusedInput === "currentLanguageLevel" ? "#4DA8DA" : "#aaa"
                 }
                 style={styles.inputIcon}
               />
@@ -1750,16 +2112,29 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("currentLanguageLevel")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.picker}
-                dropdownIconColor="#555"
+                dropdownIconColor="#4DA8DA"
               >
                 <Picker.Item label="Seviye Seçiniz" value="" color="#aaa" />
                 <Picker.Item
                   label="Başlangıç (A1-A2)"
                   value="Başlangıç (A1-A2)"
+                  color={Platform.OS === "web" ? "#000" : undefined}
                 />
-                <Picker.Item label="Orta (B1-B2)" value="Orta (B1-B2)" />
-                <Picker.Item label="İleri (C1-C2)" value="İleri (C1-C2)" />
-                <Picker.Item label="Anadil" value="Anadil" />
+                <Picker.Item
+                  label="Orta (B1-B2)"
+                  value="Orta (B1-B2)"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="İleri (C1-C2)"
+                  value="İleri (C1-C2)"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
+                <Picker.Item
+                  label="Anadil"
+                  value="Anadil"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
               </Picker>
             </View>
             <TouchableOpacity
@@ -1806,12 +2181,17 @@ export default function MyResume() {
               </View>
             )}
 
-            <View style={styles.pickerContainer}>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "selectedCertificate" && styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="ribbon-outline"
                 size={20}
                 color={
-                  focusedInput === "selectedCertificate" ? "#007AFF" : "#555"
+                  focusedInput === "selectedCertificate" ? "#4DA8DA" : "#aaa"
                 }
                 style={styles.inputIcon}
               />
@@ -1821,7 +2201,7 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("selectedCertificate")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.picker}
-                dropdownIconColor="#555"
+                dropdownIconColor="#4DA8DA"
               >
                 <Picker.Item
                   label="Sertifika/Kurs Seçiniz"
@@ -1829,21 +2209,36 @@ export default function MyResume() {
                   color="#aaa"
                 />
                 {commonCertificates.map((cert) => (
-                  <Picker.Item key={cert} label={cert} value={cert} />
+                  <Picker.Item
+                    key={cert}
+                    label={cert}
+                    value={cert}
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 ))}
-                <Picker.Item label="Diğer" value="Diğer" />
+                <Picker.Item
+                  label="Diğer"
+                  value="Diğer"
+                  color={Platform.OS === "web" ? "#000" : undefined}
+                />
               </Picker>
             </View>
 
             {selectedCertificate === "Diğer" && (
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedInput === "currentCertificateName" &&
+                    styles.inputFocused,
+                ]}
+              >
                 <Ionicons
                   name="create-outline"
                   size={20}
                   color={
                     focusedInput === "currentCertificateName"
-                      ? "#007AFF"
-                      : "#555"
+                      ? "#4DA8DA"
+                      : "#aaa"
                   }
                   style={styles.inputIcon}
                 />
@@ -1859,14 +2254,20 @@ export default function MyResume() {
               </View>
             )}
 
-            <View style={styles.inputContainer}>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "currentCertificateIssuer" &&
+                  styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="business-outline"
                 size={20}
                 color={
                   focusedInput === "currentCertificateIssuer"
-                    ? "#007AFF"
-                    : "#555"
+                    ? "#4DA8DA"
+                    : "#aaa"
                 }
                 style={styles.inputIcon}
               />
@@ -1881,12 +2282,18 @@ export default function MyResume() {
               />
             </View>
 
-            <View style={styles.pickerContainer}>
+            <View
+              style={[
+                styles.pickerContainer,
+                focusedInput === "currentCertificateYear" &&
+                  styles.inputFocused,
+              ]}
+            >
               <Ionicons
                 name="calendar-outline"
                 size={20}
                 color={
-                  focusedInput === "currentCertificateYear" ? "#007AFF" : "#555"
+                  focusedInput === "currentCertificateYear" ? "#4DA8DA" : "#aaa"
                 }
                 style={styles.inputIcon}
               />
@@ -1896,11 +2303,16 @@ export default function MyResume() {
                 onFocus={() => setFocusedInput("currentCertificateYear")}
                 onBlur={() => setFocusedInput(null)}
                 style={styles.picker}
-                dropdownIconColor="#555"
+                dropdownIconColor="#4DA8DA"
               >
                 <Picker.Item label="Yıl Seçiniz" value="" color="#aaa" />
                 {years.map((year) => (
-                  <Picker.Item key={year} label={year} value={year} />
+                  <Picker.Item
+                    key={year}
+                    label={year}
+                    value={year}
+                    color={Platform.OS === "web" ? "#000" : undefined}
+                  />
                 ))}
               </Picker>
             </View>
@@ -1924,14 +2336,20 @@ export default function MyResume() {
             ) : (
               projects.map((project, index) => (
                 <View key={index} style={styles.experienceContainer}>
-                  <View style={styles.inputContainer}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedInput === `proj_name_${index}` &&
+                        styles.inputFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="folder-outline"
                       size={20}
                       color={
                         focusedInput === `proj_name_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={styles.inputIcon}
                     />
@@ -1946,14 +2364,20 @@ export default function MyResume() {
                       placeholder="Proje Adı"
                     />
                   </View>
-                  <View style={styles.inputContainer}>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedInput === `proj_link_${index}` &&
+                        styles.inputFocused,
+                    ]}
+                  >
                     <Ionicons
                       name="link-outline"
                       size={20}
                       color={
                         focusedInput === `proj_link_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={styles.inputIcon}
                     />
@@ -1971,15 +2395,20 @@ export default function MyResume() {
                     />
                   </View>
                   <View
-                    style={[styles.inputContainer, styles.textAreaContainer]}
+                    style={[
+                      styles.inputContainer,
+                      styles.textAreaContainer,
+                      focusedInput === `proj_desc_${index}` &&
+                        styles.inputFocused,
+                    ]}
                   >
                     <Ionicons
                       name="document-text-outline"
                       size={20}
                       color={
                         focusedInput === `proj_desc_${index}`
-                          ? "#007AFF"
-                          : "#555"
+                          ? "#4DA8DA"
+                          : "#aaa"
                       }
                       style={[styles.inputIcon, { marginTop: 15 }]}
                     />
@@ -2017,11 +2446,7 @@ export default function MyResume() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 40 : 0}
-        >
+        <View style={{ flex: 1 }}>
           <View style={styles.headerContainer}>
             <TouchableOpacity
               style={styles.backButton}
@@ -2048,14 +2473,16 @@ export default function MyResume() {
             Adım {currentStep + 1} / {steps.length}: {steps[currentStep]}
           </Text>
 
-          <ScrollView
+          <KeyboardAwareScrollView
             style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            enableOnAndroid={true}
+            extraScrollHeight={20}
           >
             <View style={styles.formContainer}>{renderStepContent()}</View>
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           <View style={styles.wizardNavigationContainer}>
             <TouchableOpacity
@@ -2096,8 +2523,20 @@ export default function MyResume() {
               </TouchableOpacity>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
+
+      {/* Başarı Modalı */}
+      <CustomModal
+        visible={successModalVisible}
+        title="Başarılı!"
+        message="Özgeçmişiniz başarıyla kaydedildi."
+        type="success"
+        onClose={() => {
+          setSuccessModalVisible(false);
+          router.replace("/profile");
+        }}
+      />
     </View>
   );
 }
@@ -2129,11 +2568,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 5,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   progressContainer: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -2158,7 +2592,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     alignItems: "center",
     paddingHorizontal: 30,
-    paddingBottom: 50,
+    paddingBottom: 150,
   },
   formContainer: { width: "100%", maxWidth: Math.min(450, width * 0.9) },
   label: {
@@ -2177,10 +2611,15 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginBottom: 20,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  inputFocused: {
+    borderColor: "#4DA8DA",
   },
   inputIcon: {
     marginRight: 10,
@@ -2189,7 +2628,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 15,
     fontSize: 16,
-    color: "#000",
+    color: "#fff",
   },
   suggestionsContainer: {
     marginBottom: 20,
@@ -2309,15 +2748,18 @@ const styles = StyleSheet.create({
   pickerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginBottom: 20,
     paddingLeft: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   picker: {
     flex: 1,
     height: 55,
     width: "100%",
+    ...Platform.select({ web: { color: "#000" }, default: { color: "#fff" } }),
   },
   wizardNavigationContainer: {
     flexDirection: "row",

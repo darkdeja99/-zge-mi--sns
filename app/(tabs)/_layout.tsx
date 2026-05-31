@@ -1,8 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Notifications from "expo-notifications";
-import { router, Tabs, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { Tabs, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { LogBox, Platform } from "react-native";
+
+if (Platform.OS === "web") {
+  LogBox.ignoreLogs([
+    "props.pointerEvents is deprecated",
+    '"shadow*" style props are deprecated',
+  ]);
+}
 
 // Sadece web'de çalışan ve sekme odaktan çıkınca ekranı DOM'dan temizleyen özel kapsayıcı
 function WebUnmountWrapper({ children }: { children: React.ReactNode }) {
@@ -18,31 +24,9 @@ function WebUnmountWrapper({ children }: { children: React.ReactNode }) {
   return isFocused ? <>{children}</> : null;
 }
 
-function PushNotificationHandler() {
-  const lastNotificationResponse = Notifications.useLastNotificationResponse();
-
-  useEffect(() => {
-    if (
-      lastNotificationResponse &&
-      lastNotificationResponse.actionIdentifier ===
-        Notifications.DEFAULT_ACTION_IDENTIFIER
-    ) {
-      const data = lastNotificationResponse.notification.request.content.data;
-      if (data && data.chatId) {
-        setTimeout(() => {
-          router.push(`/chat/${data.chatId}`);
-        }, 100);
-      }
-    }
-  }, [lastNotificationResponse]);
-
-  return null;
-}
-
 export default function TabLayout() {
   return (
     <>
-      {Platform.OS !== "web" && <PushNotificationHandler />}
       <Tabs
         screenLayout={({ children }) =>
           Platform.OS === "web" ? (

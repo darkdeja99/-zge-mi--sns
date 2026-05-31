@@ -1,18 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
-import * as Device from "expo-device";
 import { Image } from "expo-image";
-import * as Notifications from "expo-notifications";
 import { Link, router } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import {
   collection,
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  updateDoc,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -29,89 +25,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
-
-// Bildirimlerin cihazda nasıl görüneceğini ayarlıyoruz
-if (Platform.OS !== "web") {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-}
-
-async function registerForPushNotificationsAsync() {
-  if (Platform.OS === "web") return null;
-  let token;
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#FF231F7C",
-    });
-  }
-  if (Device.isDevice) {
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== "granted") {
-      console.log("Bildirim izni alınamadı!");
-      return;
-    }
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-  } else {
-    console.log("Fiziksel bir cihaz kullanmalısınız.");
-  }
-  return token;
-}
-
-// Önümüzdeki 'daysCount' gün boyunca, her gün rastgele bir saatte bildirim zamanlar
-async function scheduleRandomDailyNotifications(daysCount: number = 30) {
-  if (Platform.OS === "web") return;
-  try {
-    // Önce eskiden zamanlanmış bildirimleri temizleyelim ki üst üste binmesinler
-    await Notifications.cancelAllScheduledNotificationsAsync();
-
-    const today = new Date();
-
-    for (let i = 1; i <= daysCount; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
-
-      // Gündüz saatlerinde (örneğin sabah 09:00 ile akşam 20:00 arası) rastgele bir saat seçelim
-      const minHour = 9;
-      const maxHour = 20;
-      const randomHour =
-        Math.floor(Math.random() * (maxHour - minHour + 1)) + minHour;
-      const randomMinute = Math.floor(Math.random() * 60);
-
-      targetDate.setHours(randomHour, randomMinute, 0, 0);
-
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Sana Özel Yeni İlanlar Olabilir! 🚀",
-          body: "Bugün uygulamaya göz atmak için harika bir zaman.",
-          data: { screen: "jobs" }, // İsteğe bağlı, yönlendirme için veri
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: targetDate,
-        }, // Sadece o gün ve rastgele hesaplanan saatte çalışır
-      });
-    }
-  } catch (error) {
-    console.error("Bildirimler zamanlanırken hata oluştu:", error);
-  }
-}
 
 interface UserData {
   id: string;
@@ -188,7 +103,10 @@ const UserCardItem = memo(({ item }: { item: UserData }) => (
         ) : null}
         {item.skills && item.skills.length > 0 ? (
           <Text style={styles.userSkills} numberOfLines={1}>
-            Yetenekler: {item.skills.join(", ")}
+            Yetenekler:{" "}
+            {item.skills
+              .map((s: any) => (typeof s === "string" ? s : s.name))
+              .join(", ")}
           </Text>
         ) : null}
       </View>
@@ -211,6 +129,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [focusedAge, setFocusedAge] = useState<string | null>(null);
   const [displayedCount, setDisplayedCount] = useState(10);
   const [queryLimit, setQueryLimit] = useState(30); // Sunucudan çekilecek maksimum kayıt sayısı
   const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
@@ -230,21 +149,6 @@ export default function Home() {
       setLoading(false);
       return;
     }
-
-    // Kullanıcı giriş yaptıysa push token'ını alıp profiline kaydediyoruz
-    registerForPushNotificationsAsync().then(async (token) => {
-      if (token) {
-        try {
-          const userRef = doc(db, "users", currentUser.uid);
-          await updateDoc(userRef, { pushToken: token });
-
-          // Rastgele günlük bildirimleri zamanla
-          await scheduleRandomDailyNotifications(30);
-        } catch (error) {
-          console.error("Token kaydedilemedi:", error);
-        }
-      }
-    });
 
     const usersRef = collection(db, "users");
 
@@ -294,9 +198,10 @@ export default function Home() {
         const fullName = `${user.name} ${user.surname}`.toLowerCase();
         const location = (user.location || "").toLowerCase();
         const headline = (user.headline || "").toLowerCase();
-        const hasSkillMatch = user.skills?.some((skill) =>
-          skill.toLowerCase().includes(query),
-        );
+        const hasSkillMatch = user.skills?.some((skill: any) => {
+          const sName = typeof skill === "string" ? skill : skill.name;
+          return sName.toLowerCase().includes(query);
+        });
 
         if (searchType === "skills") {
           return hasSkillMatch;
@@ -323,10 +228,11 @@ export default function Home() {
         if (!user.skills || user.skills.length === 0) return false;
         // Kullanıcının, seçilen çip yeteneklerinden HEPSİNE sahip olup olmadığını kontrol et
         return selectedSkillFilters.every((selectedSkill) =>
-          user.skills!.some(
-            (userSkill) =>
-              userSkill.toLowerCase() === selectedSkill.toLowerCase(),
-          ),
+          user.skills!.some((userSkill: any) => {
+            const sName =
+              typeof userSkill === "string" ? userSkill : userSkill.name;
+            return sName.toLowerCase() === selectedSkill.toLowerCase();
+          }),
         );
       });
     }
@@ -375,7 +281,13 @@ export default function Home() {
 
   // Kayıtlı olan tüm kullanıcılardan benzersiz yetenekleri çıkart ve sırala
   const availableSkills = Array.from(
-    new Set(users.flatMap((user) => user.skills || [])),
+    new Set(
+      users.flatMap((user) =>
+        (user.skills || []).map((s: any) =>
+          typeof s === "string" ? s : s.name,
+        ),
+      ),
+    ),
   ).sort();
 
   const renderUserItem = useCallback(
@@ -384,11 +296,7 @@ export default function Home() {
   );
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen />;
   }
 
   return (
@@ -411,7 +319,12 @@ export default function Home() {
           </TouchableOpacity>
         </View>
         <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
+          <View
+            style={[
+              styles.searchInputContainer,
+              isSearchFocused && styles.inputFocused,
+            ]}
+          >
             <Ionicons
               name="search-outline"
               size={20}
@@ -450,7 +363,7 @@ export default function Home() {
               selectedValue={searchType}
               onValueChange={(itemValue) => setSearchType(itemValue)}
               style={styles.picker}
-              dropdownIconColor="#999"
+              dropdownIconColor="#4DA8DA"
             >
               <Picker.Item
                 label="Her Yerde Ara"
@@ -481,21 +394,31 @@ export default function Home() {
           </View>
           <View style={styles.ageFilterContainer}>
             <TextInput
-              style={styles.ageInput}
+              style={[
+                styles.ageInput,
+                focusedAge === "min" && styles.inputFocused,
+              ]}
               placeholder="Min Yaş"
               placeholderTextColor="#999"
               keyboardType="numeric"
               value={minAge}
               onChangeText={setMinAge}
+              onFocus={() => setFocusedAge("min")}
+              onBlur={() => setFocusedAge(null)}
             />
             <Text style={styles.ageFilterSeparator}>-</Text>
             <TextInput
-              style={styles.ageInput}
+              style={[
+                styles.ageInput,
+                focusedAge === "max" && styles.inputFocused,
+              ]}
               placeholder="Max Yaş"
               placeholderTextColor="#999"
               keyboardType="numeric"
               value={maxAge}
               onChangeText={setMaxAge}
+              onFocus={() => setFocusedAge("max")}
+              onBlur={() => setFocusedAge(null)}
             />
           </View>
 
@@ -628,6 +551,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 10,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   searchIcon: {
     marginRight: 10,
@@ -645,10 +570,12 @@ const styles = StyleSheet.create({
   pickerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 10,
     marginTop: 10,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   picker: {
     flex: 1,
@@ -669,6 +596,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: "#fff",
     fontSize: 14,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   ageFilterSeparator: {
     color: "#999",
@@ -689,6 +618,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1,
     borderColor: "transparent",
+  },
+  inputFocused: {
+    borderColor: "#4DA8DA",
   },
   filterChipSelected: {
     backgroundColor: "rgba(77, 168, 218, 0.4)",

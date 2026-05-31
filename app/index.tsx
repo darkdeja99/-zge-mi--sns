@@ -2,16 +2,24 @@ import { Link, router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
+  LogBox,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import CustomLoader from "../components/CustomLoader";
 import { auth } from "../firebaseConfig";
+
+if (Platform.OS === "web") {
+  LogBox.ignoreLogs([
+    "props.pointerEvents is deprecated",
+    '"shadow*" style props are deprecated',
+  ]);
+}
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -43,13 +51,7 @@ export default function Index() {
   }, [fadeAnim, translateYAnim]);
 
   if (loading) {
-    return (
-      <View style={styles.background}>
-        <View style={[styles.container, { justifyContent: "center" }]}>
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      </View>
-    );
+    return <CustomLoader fullScreen />;
   }
 
   return (

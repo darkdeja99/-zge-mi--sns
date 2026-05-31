@@ -22,15 +22,14 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db, storage } from "../firebaseConfig";
 
@@ -159,99 +158,103 @@ export default function Settings() {
   return (
     <View style={styles.background}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
+        <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          enableOnAndroid={true}
+          extraScrollHeight={20}
         >
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Ayarlar</Text>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Ayarlar</Text>
 
-            <View style={styles.menuContainer}>
-              <Link href="/account-settings" asChild>
-                <TouchableOpacity style={styles.menuButton}>
-                  <Ionicons
-                    name="key-outline"
-                    size={22}
-                    color="#fff"
-                    style={styles.menuIcon}
-                  />
-                  <Text style={styles.menuButtonText}>Şifre Değiştir</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
-                </TouchableOpacity>
-              </Link>
-            </View>
-
-            <View style={styles.warningContainer}>
-              <Ionicons name="warning-outline" size={48} color="#d9534f" />
-              <Text style={styles.warningTitle}>Tehlikeli Bölge</Text>
-              <Text style={styles.warningText}>
-                Hesabınızı sildiğinizde özgeçmişiniz ve profilinize dair tüm
-                verileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
-              </Text>
-            </View>
-
-            <View style={styles.formContainer}>
-              <Text style={styles.label}>
-                İşlemi onaylamak için şifrenizi girin:
-              </Text>
-              <View style={styles.inputContainer}>
+          <View style={styles.menuContainer}>
+            <Link href="/account-settings" asChild>
+              <TouchableOpacity style={styles.menuButton}>
                 <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={focusedInput === "password" ? "#d9534f" : "#555"}
-                  style={styles.inputIcon}
+                  name="key-outline"
+                  size={22}
+                  color="#fff"
+                  style={styles.menuIcon}
                 />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Mevcut Şifreniz"
-                  placeholderTextColor="#aaa"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() => setFocusedInput(null)}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={{ padding: 5 }}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#888"
-                  />
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.menuButtonText}>Şifre Değiştir</Text>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
+            </Link>
+          </View>
 
+          <View style={styles.warningContainer}>
+            <Ionicons name="warning-outline" size={48} color="#d9534f" />
+            <Text style={styles.warningTitle}>Tehlikeli Bölge</Text>
+            <Text style={styles.warningText}>
+              Hesabınızı sildiğinizde özgeçmişiniz ve profilinize dair tüm
+              verileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
+            </Text>
+          </View>
+
+          <View style={styles.formContainer}>
+            <Text style={styles.label}>
+              İşlemi onaylamak için şifrenizi girin:
+            </Text>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === "password" && styles.inputContainerFocused,
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={focusedInput === "password" ? "#d9534f" : "#555"}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Mevcut Şifreniz"
+                placeholderTextColor="#aaa"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedInput("password")}
+                onBlur={() => setFocusedInput(null)}
+              />
               <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.deleteButton,
-                  loading && styles.buttonDisabled,
-                ]}
-                onPress={handleDeleteAccount}
-                disabled={loading}
+                onPress={() => setShowPassword(!showPassword)}
+                style={{ padding: 5 }}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>
-                    Hesabımı Kalıcı Olarak Sil
-                  </Text>
-                )}
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="#888"
+                />
               </TouchableOpacity>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.deleteButton,
+                loading && styles.buttonDisabled,
+              ]}
+              onPress={handleDeleteAccount}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  Hesabımı Kalıcı Olarak Sil
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     </View>
   );
@@ -338,6 +341,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 20,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  inputContainerFocused: {
+    borderColor: "#d9534f",
   },
   inputIcon: { marginRight: 10 },
   input: { flex: 1, paddingVertical: 15, fontSize: 16, color: "#000" },

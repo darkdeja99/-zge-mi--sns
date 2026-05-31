@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   arrayRemove,
@@ -12,12 +13,11 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  updateDoc,
+  setDoc,
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -28,6 +28,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 
@@ -38,6 +39,9 @@ interface JobDetails {
   location: string;
   type?: string;
   workModel?: string;
+  experience?: string;
+  salaryRange?: { min: string; max: string };
+  skills?: string[];
   description?: string;
   employerId: string;
   contactEmail?: string;
@@ -88,25 +92,34 @@ export default function JobDetailsScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!auth.currentUser || !id) return;
-    const userRef = doc(db, "users", auth.currentUser.uid);
-    const unsub = onSnapshot(
-      userRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const savedJobs = docSnap.data().savedJobs || [];
-          const appliedJobs = docSnap.data().appliedJobs || [];
-          setIsSaved(savedJobs.includes(id as string));
-          setIsApplied(appliedJobs.includes(id as string));
-        }
-      },
-      (error) => {
-        if (error.code !== "permission-denied") {
-          console.error("Kullanıcı verisi dinlenirken hata:", error);
-        }
-      },
-    );
-    return () => unsub();
+    let unsub: (() => void) | undefined;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user && id) {
+        const userRef = doc(db, "users", user.uid);
+        unsub = onSnapshot(
+          userRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const savedJobs = docSnap.data().savedJobs || [];
+              const appliedJobs = docSnap.data().appliedJobs || [];
+              setIsSaved(savedJobs.includes(id as string));
+              setIsApplied(appliedJobs.includes(id as string));
+            }
+          },
+          (error) => {
+            if (error.code !== "permission-denied") {
+              console.error("Kullanıcı verisi dinlenirken hata:", error);
+            }
+          },
+        );
+      } else {
+        if (unsub) unsub();
+      }
+    });
+    return () => {
+      unsubscribeAuth();
+      if (unsub) unsub();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -168,10 +181,14 @@ export default function JobDetailsScreen() {
             const userRef = doc(db, "users", currentUserUid);
             const jobRef = doc(db, "jobs", id as string);
             await Promise.all([
-              updateDoc(userRef, { appliedJobs: arrayUnion(id) }),
-              updateDoc(jobRef, {
-                applicants: arrayUnion(currentUserUid),
-              }),
+              setDoc(userRef, { appliedJobs: arrayUnion(id) }, { merge: true }),
+              setDoc(
+                jobRef,
+                {
+                  applicants: arrayUnion(currentUserUid),
+                },
+                { merge: true },
+              ),
             ]);
           } catch (err) {
             console.error("Başvuru durumu kaydedilemedi:", err);
@@ -198,8 +215,12 @@ export default function JobDetailsScreen() {
       const jobRef = doc(db, "jobs", id as string);
       try {
         await Promise.all([
-          updateDoc(userRef, { appliedJobs: arrayRemove(id) }),
-          updateDoc(jobRef, { applicants: arrayRemove(currentUserUid) }),
+          setDoc(userRef, { appliedJobs: arrayRemove(id) }, { merge: true }),
+          setDoc(
+            jobRef,
+            { applicants: arrayRemove(currentUserUid) },
+            { merge: true },
+          ),
         ]);
         if (Platform.OS === "web") {
           window.alert("Başvurunuz başarıyla geri çekildi.");
@@ -274,11 +295,15 @@ export default function JobDetailsScreen() {
     if (!auth.currentUser || !id) return;
     const userRef = doc(db, "users", auth.currentUser.uid);
     try {
-      await updateDoc(userRef, {
-        savedJobs: isSaved
-          ? arrayRemove(id as string)
-          : arrayUnion(id as string),
-      });
+      await setDoc(
+        userRef,
+        {
+          savedJobs: isSaved
+            ? arrayRemove(id as string)
+            : arrayUnion(id as string),
+        },
+        { merge: true },
+      );
     } catch (error) {
       console.error("İlan kaydedilirken hata:", error);
       Alert.alert("Hata", "İlan durumu güncellenemedi.");
@@ -286,20 +311,7 @@ export default function JobDetailsScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.background}>
-        <SafeAreaView style={styles.safeArea}>
-          <View
-            style={[
-              styles.container,
-              { justifyContent: "center", alignItems: "center" },
-            ]}
-          >
-            <ActivityIndicator size="large" color="#fff" />
-          </View>
-        </SafeAreaView>
-      </View>
-    );
+    return <CustomLoader fullScreen text="İlan Detayları Yükleniyor..." />;
   }
 
   if (!job) return null;
@@ -351,6 +363,12 @@ export default function JobDetailsScreen() {
           </View>
 
           <View style={styles.badgesRow}>
+            {job.experience && (
+              <View style={styles.badge}>
+                <Ionicons name="star-outline" size={14} color="#4DA8DA" />
+                <Text style={styles.badgeText}>{job.experience}</Text>
+              </View>
+            )}
             {job.workModel && (
               <View style={styles.badge}>
                 <Ionicons name="laptop-outline" size={14} color="#4DA8DA" />
@@ -363,6 +381,17 @@ export default function JobDetailsScreen() {
                 <Text style={styles.badgeText}>{job.type}</Text>
               </View>
             )}
+            {job.salaryRange &&
+              (job.salaryRange.min || job.salaryRange.max) && (
+                <View style={styles.badge}>
+                  <Ionicons name="cash-outline" size={14} color="#4DA8DA" />
+                  <Text style={styles.badgeText}>
+                    {job.salaryRange.min ? `${job.salaryRange.min} ₺` : ""}
+                    {job.salaryRange.min && job.salaryRange.max ? " - " : ""}
+                    {job.salaryRange.max ? `${job.salaryRange.max} ₺` : ""}
+                  </Text>
+                </View>
+              )}
           </View>
 
           <View style={styles.descriptionSection}>
@@ -372,6 +401,22 @@ export default function JobDetailsScreen() {
             </View>
             <Text style={styles.descriptionText}>{job.description}</Text>
           </View>
+
+          {job.skills && job.skills.length > 0 && (
+            <View style={[styles.descriptionSection, { marginTop: 15 }]}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="construct-outline" size={20} color="#4DA8DA" />
+                <Text style={styles.sectionTitle}>Aranan Yetenekler</Text>
+              </View>
+              <View style={styles.skillsContainer}>
+                {job.skills.map((skill, index) => (
+                  <View key={index} style={styles.skillChip}>
+                    <Text style={styles.skillChipText}>{skill}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {isEmployer && applicantsList.length > 0 && (
             <View style={[styles.descriptionSection, { marginTop: 15 }]}>
@@ -569,6 +614,20 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   descriptionText: { color: "#ddd", fontSize: 15, lineHeight: 24 },
+  skillsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  skillChip: {
+    backgroundColor: "rgba(77, 168, 218, 0.15)",
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(77, 168, 218, 0.5)",
+  },
+  skillChipText: { color: "#4DA8DA", fontSize: 14, fontWeight: "bold" },
   footer: {
     flexDirection: "row",
     padding: 20,

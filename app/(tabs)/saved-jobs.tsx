@@ -1,27 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import {
-    arrayRemove,
-    collection,
-    doc,
-    documentId,
-    onSnapshot,
-    query,
-    updateDoc,
-    where,
+  arrayRemove,
+  collection,
+  doc,
+  documentId,
+  onSnapshot,
+  query,
+  setDoc,
+  where,
 } from "firebase/firestore";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomLoader from "../../components/CustomLoader";
 import { auth, db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 import { Job } from "./jobs";
@@ -107,23 +109,31 @@ export default function SavedJobs() {
   const [displayedCount, setDisplayedCount] = useState(10);
 
   useEffect(() => {
-    if (auth.currentUser) {
-      const userRef = doc(db, "users", auth.currentUser.uid);
-      const unsubUser = onSnapshot(
-        userRef,
-        (docSnap) => {
-          if (docSnap.exists()) {
-            setSavedJobIds(docSnap.data().savedJobs || []);
-          }
-        },
-        (error) => {
-          if (error.code !== "permission-denied") {
-            console.error("Kullanıcı verisi dinlenirken hata:", error);
-          }
-        },
-      );
-      return () => unsubUser();
-    }
+    let unsubUser: (() => void) | undefined;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        unsubUser = onSnapshot(
+          userRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setSavedJobIds(docSnap.data().savedJobs || []);
+            }
+          },
+          (error) => {
+            if (error.code !== "permission-denied") {
+              console.error("Kullanıcı verisi dinlenirken hata:", error);
+            }
+          },
+        );
+      } else {
+        if (unsubUser) unsubUser();
+      }
+    });
+    return () => {
+      unsubscribeAuth();
+      if (unsubUser) unsubUser();
+    };
   }, []);
 
   useEffect(() => {
@@ -221,9 +231,13 @@ export default function SavedJobs() {
     if (!auth.currentUser) return;
     const userRef = doc(db, "users", auth.currentUser.uid);
     try {
-      await updateDoc(userRef, {
-        savedJobs: arrayRemove(jobId),
-      });
+      await setDoc(
+        userRef,
+        {
+          savedJobs: arrayRemove(jobId),
+        },
+        { merge: true },
+      );
     } catch (error) {
       console.error("İlan kaydedilirken hata:", error);
     }
@@ -237,11 +251,7 @@ export default function SavedJobs() {
   );
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+    return <CustomLoader fullScreen />;
   }
 
   return (
@@ -349,12 +359,6 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, color: "#fff", paddingVertical: 10, fontSize: 15 },
   clearIcon: { marginLeft: 10, padding: 5 },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
   listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
   jobCard: {
     backgroundColor: "rgba(255, 255, 255, 0.1)",

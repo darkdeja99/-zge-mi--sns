@@ -2,13 +2,19 @@
   "expo": {
     "name": "ozgecmis-sns",
     "slug": "ozgecmis-sns",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ozgecmissns",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.darkdeja99.ozgecmissns",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için kameranıza erişmemiz gerekiyor.",
+        "NSPhotoLibraryUsageDescription": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için galerinize erişmemiz gerekiyor."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +24,14 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.darkdeja99.ozgecmissns"
+      "package": "com.darkdeja99.ozgecmissns",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
