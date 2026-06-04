@@ -106,7 +106,7 @@ export default function ManageJobs() {
     try {
       const jobData = jobs.find((j) => j.id === jobToDelete.id);
 
-      // Önce log tablosuna kaydediyoruz
+      //  log tablosu kayıt
       await addDoc(collection(db, "deleted_jobs"), {
         originalJobId: jobToDelete.id,
         title: jobToDelete.title,

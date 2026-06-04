@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   arrayRemove,
@@ -12,10 +12,11 @@ import {
   query,
   setDoc,
 } from "firebase/firestore";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Platform,
   RefreshControl,
@@ -206,6 +207,7 @@ const JobCardItem = memo(
 );
 
 export default function Jobs() {
+  const { search } = useLocalSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
   const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
@@ -215,6 +217,32 @@ export default function Jobs() {
   const [refreshing, setRefreshing] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [displayedCount, setDisplayedCount] = useState(10);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+
+  useEffect(() => {
+    if (search && typeof search === "string") {
+      setSearchQuery(search);
+    }
+  }, [search]);
+
+  const filterAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleFilters = () => {
+    if (isFiltersVisible) {
+      Animated.timing(filterAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setIsFiltersVisible(false));
+    } else {
+      setIsFiltersVisible(true);
+      Animated.timing(filterAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   useEffect(() => {
     let unsubUser: (() => void) | undefined;
@@ -492,68 +520,100 @@ export default function Jobs() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === "all" && styles.activeTab]}
-            onPress={() => setActiveTab("all")}
+        <View style={styles.searchRow}>
+          <View
+            style={[
+              styles.searchContainer,
+              isSearchFocused && styles.inputFocused,
+              { flex: 1, marginHorizontal: 0, marginBottom: 0 },
+            ]}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "all" && styles.activeTabText,
-              ]}
-            >
-              Tüm İlanlar
-            </Text>
-          </TouchableOpacity>
+            <Ionicons
+              name="search-outline"
+              size={20}
+              color="#999"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="İlan adı, şirket veya konum ara..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                style={styles.clearIcon}
+              >
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
           <TouchableOpacity
             style={[
-              styles.tabButton,
-              activeTab === "applied" && styles.activeTab,
+              styles.filterToggleButton,
+              isFiltersVisible && styles.filterToggleButtonActive,
             ]}
-            onPress={() => setActiveTab("applied")}
+            onPress={toggleFilters}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "applied" && styles.activeTabText,
-              ]}
-            >
-              Başvurularım
-            </Text>
+            <Ionicons
+              name="options-outline"
+              size={24}
+              color={isFiltersVisible ? "#4DA8DA" : "#fff"}
+            />
           </TouchableOpacity>
         </View>
 
-        <View
-          style={[
-            styles.searchContainer,
-            isSearchFocused && styles.inputFocused,
-          ]}
-        >
-          <Ionicons
-            name="search-outline"
-            size={20}
-            color="#999"
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="İlan adı, şirket veya konum ara..."
-            placeholderTextColor="#999"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery("")}
-              style={styles.clearIcon}
-            >
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
+        {isFiltersVisible && (
+          <Animated.View
+            style={{
+              opacity: filterAnim,
+              maxHeight: filterAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 100],
+              }),
+              overflow: "hidden",
+            }}
+          >
+            <View style={[styles.tabContainer, { marginTop: 10 }]}>
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === "all" && styles.activeTab,
+                ]}
+                onPress={() => setActiveTab("all")}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === "all" && styles.activeTabText,
+                  ]}
+                >
+                  Tüm İlanlar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === "applied" && styles.activeTab,
+                ]}
+                onPress={() => setActiveTab("applied")}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === "applied" && styles.activeTabText,
+                  ]}
+                >
+                  Başvurularım
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
 
         <FlatList
           data={paginatedJobs}
@@ -651,6 +711,26 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: "#4DA8DA" },
   tabText: { color: "#aaa", fontWeight: "600", fontSize: 14 },
   activeTabText: { color: "#fff" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginBottom: 10,
+    gap: 10,
+  },
+  filterToggleButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterToggleButtonActive: {
+    borderColor: "#4DA8DA",
+    backgroundColor: "rgba(77, 168, 218, 0.2)",
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",

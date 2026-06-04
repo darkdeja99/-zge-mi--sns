@@ -2,26 +2,26 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    onSnapshot,
+    orderBy,
+    query,
+    serverTimestamp,
 } from "firebase/firestore";
 import { deleteObject, ref } from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  FlatList,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    FlatList,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomLoader from "../../components/CustomLoader";
@@ -115,7 +115,7 @@ export default function ManageUsers() {
     try {
       const userData = users.find((u) => u.id === userToDelete.id);
 
-      // Önce log tablosuna kaydediyoruz
+      // log tablosu kayıt
       await addDoc(collection(db, "deleted_users"), {
         originalUserId: userToDelete.id,
         name: userToDelete.name,
@@ -128,7 +128,7 @@ export default function ManageUsers() {
           : auth.currentUser?.uid || "Bilinmiyor",
       });
 
-      // Firebase Storage'dan kullanıcının profil fotoğrafını siliyoruz
+      // kullanıcın profil  silme
       if (userData?.photoURL) {
         const photoRef = ref(storage, `profile_pictures/${userToDelete.id}`);
         await deleteObject(photoRef).catch(() => {});

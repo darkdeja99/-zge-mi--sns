@@ -3,21 +3,21 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    where,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
 } from "firebase/firestore";
 import { memo, useEffect, useState } from "react";
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomLoader from "../../components/CustomLoader";
@@ -72,7 +72,9 @@ const ChatItem = memo(
                 : "Yükleniyor..."}
             </Text>
             <Text style={styles.timeText}>
-              {chat.lastMessageTime ? formatTimeAgo(chat.lastMessageTime) : ""}
+              {chat.lastMessageTime
+                ? formatTimeAgo(chat.lastMessageTime, "chat")
+                : ""}
             </Text>
           </View>
           <View

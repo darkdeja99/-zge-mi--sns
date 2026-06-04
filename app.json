@@ -2,36 +2,25 @@
   "expo": {
     "name": "ozgecmis-sns",
     "slug": "ozgecmis-sns",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon_deneme_3.png",
     "scheme": "ozgecmissns",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.darkdeja99.ozgecmissns",
-      "buildNumber": "1",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için kameranıza erişmemiz gerekiyor.",
-        "NSPhotoLibraryUsageDescription": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için galerinize erişmemiz gerekiyor."
-      }
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0f2027",
+        "foregroundImage": "./assets/images/icon_deneme_3.png"
       },
-      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "predictiveBackGestureEnabled": true,
       "package": "com.darkdeja99.ozgecmissns",
-      "versionCode": 1,
-      "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
-      ]
+      "versionCode": 2
     },
     "web": {
       "output": "static",
@@ -42,12 +31,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#1E1E1E",
+          "backgroundColor": "#0f2027",
           "dark": {
-            "backgroundColor": "#1E1E1E"
+            "backgroundColor": "#0f2027"
           }
         }
       ],
@@ -55,14 +44,20 @@
       "expo-image",
       "expo-web-browser",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için galerinize erişmemiz gerekiyor.",
+          "cameraPermission": "Profil fotoğrafınızı güncellemek ve sohbetlerde fotoğraf gönderebilmek için kameranıza erişmemiz gerekiyor."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "4c9aa5ab-baf3-4395-a985-32668f506337"
       }

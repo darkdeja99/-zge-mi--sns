@@ -10,9 +10,10 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Keyboard,
   Platform,
@@ -133,6 +134,26 @@ export default function Home() {
   const [displayedCount, setDisplayedCount] = useState(10);
   const [queryLimit, setQueryLimit] = useState(30); // Sunucudan çekilecek maksimum kayıt sayısı
   const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+
+  const filterAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleFilters = () => {
+    if (isFiltersVisible) {
+      Animated.timing(filterAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      }).start(() => setIsFiltersVisible(false));
+    } else {
+      setIsFiltersVisible(true);
+      Animated.timing(filterAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -319,152 +340,212 @@ export default function Home() {
           </TouchableOpacity>
         </View>
         <View style={styles.searchContainer}>
-          <View
-            style={[
-              styles.searchInputContainer,
-              isSearchFocused && styles.inputFocused,
-            ]}
-          >
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={isSearchFocused ? "#4DA8DA" : "#999"}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="İsim, unvan, konum veya yetenek ara..."
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery("");
-                  Keyboard.dismiss();
-                }}
-                style={styles.clearIcon}
-              >
-                <Ionicons name="close-circle" size={20} color="#999" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.pickerContainer}>
-            <Ionicons
-              name="filter-outline"
-              size={20}
-              color="#999"
-              style={styles.searchIcon}
-            />
-            <Picker
-              selectedValue={searchType}
-              onValueChange={(itemValue) => setSearchType(itemValue)}
-              style={styles.picker}
-              dropdownIconColor="#4DA8DA"
+          <View style={styles.searchRow}>
+            <View
+              style={[
+                styles.searchInputContainer,
+                isSearchFocused && styles.inputFocused,
+                { flex: 1 },
+              ]}
             >
-              <Picker.Item
-                label="Her Yerde Ara"
-                value="all"
-                color={Platform.OS === "android" ? "#aaa" : undefined}
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={isSearchFocused ? "#4DA8DA" : "#999"}
+                style={styles.searchIcon}
               />
-              <Picker.Item
-                label="Sadece İsimlerde"
-                value="name"
-                color={Platform.OS === "android" ? "#aaa" : undefined}
+              <TextInput
+                style={styles.searchInput}
+                placeholder="İsim, unvan, konum veya yetenek ara..."
+                placeholderTextColor="#999"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
               />
-              <Picker.Item
-                label="Sadece Unvanlarda"
-                value="headline"
-                color={Platform.OS === "android" ? "#aaa" : undefined}
-              />
-              <Picker.Item
-                label="Sadece Konumlarda"
-                value="location"
-                color={Platform.OS === "android" ? "#aaa" : undefined}
-              />
-              <Picker.Item
-                label="Sadece Yeteneklerde"
-                value="skills"
-                color={Platform.OS === "android" ? "#aaa" : undefined}
-              />
-            </Picker>
-          </View>
-          <View style={styles.ageFilterContainer}>
-            <TextInput
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery("");
+                    Keyboard.dismiss();
+                  }}
+                  style={styles.clearIcon}
+                >
+                  <Ionicons name="close-circle" size={20} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
               style={[
-                styles.ageInput,
-                focusedAge === "min" && styles.inputFocused,
+                styles.filterToggleButton,
+                isFiltersVisible && styles.filterToggleButtonActive,
               ]}
-              placeholder="Min Yaş"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              value={minAge}
-              onChangeText={setMinAge}
-              onFocus={() => setFocusedAge("min")}
-              onBlur={() => setFocusedAge(null)}
-            />
-            <Text style={styles.ageFilterSeparator}>-</Text>
-            <TextInput
-              style={[
-                styles.ageInput,
-                focusedAge === "max" && styles.inputFocused,
-              ]}
-              placeholder="Max Yaş"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              value={maxAge}
-              onChangeText={setMaxAge}
-              onFocus={() => setFocusedAge("max")}
-              onBlur={() => setFocusedAge(null)}
-            />
+              onPress={toggleFilters}
+            >
+              <Ionicons
+                name="options-outline"
+                size={24}
+                color={isFiltersVisible ? "#4DA8DA" : "#fff"}
+              />
+            </TouchableOpacity>
           </View>
 
-          {/* YETENEK ÇİPLERİ (Yatay Scroll) */}
-          {availableSkills.length > 0 && (
-            <View style={styles.filterChipsContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingRight: 20 }}
-              >
-                {availableSkills.map((skill) => {
-                  const isSelected = selectedSkillFilters.includes(skill);
-                  return (
-                    <TouchableOpacity
-                      key={skill}
-                      style={[
-                        styles.filterChip,
-                        isSelected && styles.filterChipSelected,
-                      ]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedSkillFilters(
-                            selectedSkillFilters.filter((s) => s !== skill),
-                          );
-                        } else {
-                          setSelectedSkillFilters([
-                            ...selectedSkillFilters,
-                            skill,
-                          ]);
-                        }
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          isSelected && styles.filterChipTextSelected,
-                        ]}
-                      >
-                        {skill}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+          {isFiltersVisible && (
+            <Animated.View
+              style={{
+                opacity: filterAnim,
+                maxHeight: filterAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 500],
+                }),
+                overflow: "hidden",
+              }}
+            >
+              <View style={styles.pickerContainer}>
+                <Ionicons
+                  name="filter-outline"
+                  size={20}
+                  color="#999"
+                  style={styles.searchIcon}
+                />
+                <Picker
+                  selectedValue={searchType}
+                  onValueChange={(itemValue) => setSearchType(itemValue)}
+                  style={styles.picker}
+                  dropdownIconColor="#4DA8DA"
+                >
+                  <Picker.Item
+                    label="Her Yerde Ara"
+                    value="all"
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
+                  <Picker.Item
+                    label="Sadece İsimlerde"
+                    value="name"
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
+                  <Picker.Item
+                    label="Sadece Unvanlarda"
+                    value="headline"
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
+                  <Picker.Item
+                    label="Sadece Konumlarda"
+                    value="location"
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
+                  <Picker.Item
+                    label="Sadece Yeteneklerde"
+                    value="skills"
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
+                </Picker>
+              </View>
+              <View style={styles.ageFilterContainer}>
+                <TextInput
+                  style={[
+                    styles.ageInput,
+                    focusedAge === "min" && styles.inputFocused,
+                  ]}
+                  placeholder="Min Yaş"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  value={minAge}
+                  onChangeText={setMinAge}
+                  onFocus={() => setFocusedAge("min")}
+                  onBlur={() => setFocusedAge(null)}
+                />
+                <Text style={styles.ageFilterSeparator}>-</Text>
+                <TextInput
+                  style={[
+                    styles.ageInput,
+                    focusedAge === "max" && styles.inputFocused,
+                  ]}
+                  placeholder="Max Yaş"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  value={maxAge}
+                  onChangeText={setMaxAge}
+                  onFocus={() => setFocusedAge("max")}
+                  onBlur={() => setFocusedAge(null)}
+                />
+              </View>
+
+              {/* YETENEK ÇİPLERİ (Yatay Scroll) */}
+              {availableSkills.length > 0 && (
+                <View style={styles.filterChipsContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingRight: 20 }}
+                  >
+                    {availableSkills.map((skill) => {
+                      const isSelected = selectedSkillFilters.includes(skill);
+                      return (
+                        <TouchableOpacity
+                          key={skill}
+                          style={[
+                            styles.filterChip,
+                            isSelected && styles.filterChipSelected,
+                          ]}
+                          onPress={() => {
+                            if (isSelected) {
+                              setSelectedSkillFilters(
+                                selectedSkillFilters.filter((s) => s !== skill),
+                              );
+                            } else {
+                              setSelectedSkillFilters([
+                                ...selectedSkillFilters,
+                                skill,
+                              ]);
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.filterChipText,
+                              isSelected && styles.filterChipTextSelected,
+                            ]}
+                          >
+                            {skill}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+            </Animated.View>
           )}
         </View>
         <FlatList
@@ -545,6 +626,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
   },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  filterToggleButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterToggleButtonActive: {
+    borderColor: "#4DA8DA",
+    backgroundColor: "rgba(77, 168, 218, 0.2)",
+  },
   searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -579,7 +678,7 @@ const styles = StyleSheet.create({
   },
   picker: {
     flex: 1,
-    color: "#fff",
+    ...Platform.select({ web: { color: "#000" }, default: { color: "#fff" } }),
     height: Platform.OS === "ios" ? 45 : 55,
   },
   ageFilterContainer: {

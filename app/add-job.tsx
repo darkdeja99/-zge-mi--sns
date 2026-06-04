@@ -430,7 +430,17 @@ export default function AddJob() {
                   onFocus={() => setFocusedInput("location")}
                   onBlur={() => setFocusedInput(null)}
                 >
-                  <Picker.Item label="Şehir Seçiniz" value="" color="#aaa" />
+                  <Picker.Item
+                    label="Şehir Seçiniz"
+                    value=""
+                    color={
+                      Platform.OS === "web"
+                        ? "#000"
+                        : Platform.OS === "android"
+                          ? "#aaa"
+                          : undefined
+                    }
+                  />
                   {provinces.map((province) => (
                     <Picker.Item
                       key={province}

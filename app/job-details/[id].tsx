@@ -410,9 +410,18 @@ export default function JobDetailsScreen() {
               </View>
               <View style={styles.skillsContainer}>
                 {job.skills.map((skill, index) => (
-                  <View key={index} style={styles.skillChip}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.skillChip}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(tabs)/jobs",
+                        params: { search: skill },
+                      })
+                    }
+                  >
                     <Text style={styles.skillChipText}>{skill}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -465,46 +474,48 @@ export default function JobDetailsScreen() {
 
         {!isEmployer && (
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.messageButton}
-              onPress={handleStartChat}
-            >
-              <Ionicons
-                name="chatbubbles-outline"
-                size={20}
-                color="#4DA8DA"
-                style={{ marginRight: 8 }}
-              />
-              <Text style={styles.messageButtonText}>Mesaj Gönder</Text>
-            </TouchableOpacity>
+            <View style={styles.footerInner}>
+              <TouchableOpacity
+                style={styles.messageButton}
+                onPress={handleStartChat}
+              >
+                <Ionicons
+                  name="chatbubbles-outline"
+                  size={20}
+                  color="#4DA8DA"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.messageButtonText}>Mesaj Gönder</Text>
+              </TouchableOpacity>
 
-            {isApplied ? (
-              <TouchableOpacity
-                style={[styles.applyButton, { backgroundColor: "#d9534f" }]}
-                onPress={handleWithdraw}
-              >
-                <Ionicons
-                  name="close-circle-outline"
-                  size={20}
-                  color="#fff"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.applyButtonText}>Geri Çek</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={handleApply}
-              >
-                <Ionicons
-                  name="paper-plane-outline"
-                  size={20}
-                  color="#fff"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.applyButtonText}>Başvur</Text>
-              </TouchableOpacity>
-            )}
+              {isApplied ? (
+                <TouchableOpacity
+                  style={[styles.applyButton, { backgroundColor: "#d9534f" }]}
+                  onPress={handleWithdraw}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color="#fff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.applyButtonText}>Geri Çek</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.applyButton}
+                  onPress={handleApply}
+                >
+                  <Ionicons
+                    name="paper-plane-outline"
+                    size={20}
+                    color="#fff"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.applyButtonText}>Başvur</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
       </SafeAreaView>
@@ -515,92 +526,99 @@ export default function JobDetailsScreen() {
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: "#0f2027" },
   safeArea: { flex: 1 },
-  container: { flexGrow: 1, padding: 20, paddingTop: 60, paddingBottom: 20 },
+  container: {
+    padding: 20,
+    paddingTop: 60,
+    paddingBottom: 40,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 800,
+  },
   backButton: {
     position: "absolute",
-    top: 20,
+    top: 40,
     left: 20,
-    zIndex: 1,
+    zIndex: 10,
     padding: 5,
   },
   saveHeaderButton: {
     position: "absolute",
-    top: 20,
+    top: 40,
     right: 20,
-    zIndex: 1,
+    zIndex: 10,
     padding: 5,
   },
   headerSection: {
-    marginTop: 20,
-    marginBottom: 25,
     alignItems: "center",
+    marginBottom: 20,
   },
   companyLogoContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(77, 168, 218, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
-    borderWidth: 2,
-    borderColor: "#4DA8DA",
   },
   companyLogoText: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: "bold",
-    color: "#4DA8DA",
+    color: "#fff",
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 8,
     textAlign: "center",
+    marginBottom: 5,
   },
   company: {
     fontSize: 18,
     color: "#4DA8DA",
     fontWeight: "600",
-    marginBottom: 12,
-    textAlign: "center",
+    marginBottom: 10,
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
   },
-  locationText: { color: "#ccc", fontSize: 14, marginLeft: 4 },
-  timeText: { color: "#888", fontSize: 14 },
+  locationText: {
+    fontSize: 14,
+    color: "#ccc",
+    marginLeft: 4,
+  },
+  timeText: {
+    fontSize: 14,
+    color: "#888",
+    fontStyle: "italic",
+  },
   badgesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
     gap: 10,
-    marginBottom: 25,
+    marginBottom: 20,
+    justifyContent: "center",
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(77, 168, 218, 0.15)",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(77, 168, 218, 0.3)",
   },
   badgeText: {
-    color: "#4DA8DA",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#fff",
+    fontSize: 13,
     marginLeft: 6,
   },
   descriptionSection: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     padding: 20,
     borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.05)",
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -613,70 +631,103 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginLeft: 8,
   },
-  descriptionText: { color: "#ddd", fontSize: 15, lineHeight: 24 },
+  descriptionText: {
+    fontSize: 15,
+    color: "#ddd",
+    lineHeight: 24,
+  },
   skillsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
   skillChip: {
-    backgroundColor: "rgba(77, 168, 218, 0.15)",
-    paddingVertical: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 15,
+    paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(77, 168, 218, 0.5)",
   },
-  skillChipText: { color: "#4DA8DA", fontSize: 14, fontWeight: "bold" },
-  footer: {
-    flexDirection: "row",
-    padding: 20,
-    backgroundColor: "#0f2027",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    gap: 10,
+  skillChipText: {
+    color: "#fff",
+    fontSize: 14,
   },
-  messageButton: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: "rgba(77, 168, 218, 0.15)",
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#4DA8DA",
-  },
-  messageButtonText: { color: "#4DA8DA", fontSize: 16, fontWeight: "bold" },
-  applyButton: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: "#4DA8DA",
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  applyButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   applicantCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.05)",
-    padding: 12,
-    borderRadius: 10,
+    padding: 15,
+    borderRadius: 12,
     marginBottom: 10,
   },
   applicantAvatarContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(77, 168, 218, 0.2)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 15,
   },
-  applicantAvatarText: { color: "#4DA8DA", fontSize: 18, fontWeight: "bold" },
-  applicantInfo: { flex: 1 },
-  applicantName: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  applicantHeadline: { color: "#ccc", fontSize: 13, marginTop: 2 },
+  applicantAvatarText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  applicantInfo: {
+    flex: 1,
+  },
+  applicantName: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  applicantHeadline: {
+    color: "#aaa",
+    fontSize: 13,
+  },
+  footer: {
+    padding: 20,
+    backgroundColor: "#0f2027",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.1)",
+    alignItems: "center",
+  },
+  footerInner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    maxWidth: 800,
+    gap: 15,
+  },
+  messageButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+    backgroundColor: "rgba(77, 168, 218, 0.15)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#4DA8DA",
+  },
+  messageButtonText: {
+    color: "#4DA8DA",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  applyButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 15,
+    backgroundColor: "#4DA8DA",
+    borderRadius: 12,
+  },
+  applyButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
 });

@@ -3,12 +3,12 @@ import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
 import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    FlatList,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomLoader from "../../components/CustomLoader";
@@ -117,7 +117,6 @@ export default function Logs() {
 
   const filteredLogs = useMemo(() => {
     const combined = [...userLogs, ...jobLogs];
-    // Birleştirilmiş diziyi tarihe göre sırala
     combined.sort((a, b) => {
       const timeA = a.deletedAt?.toMillis ? a.deletedAt.toMillis() : 0;
       const timeB = b.deletedAt?.toMillis ? b.deletedAt.toMillis() : 0;

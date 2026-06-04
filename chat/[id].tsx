@@ -1,28 +1,32 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    updateDoc,
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../firebaseConfig";
@@ -34,6 +38,36 @@ interface Message {
   createdAt: any;
 }
 
+const monthNames = [
+  "Ocak",
+  "Şubat",
+  "Mart",
+  "Nisan",
+  "Mayıs",
+  "Haziran",
+  "Temmuz",
+  "Ağustos",
+  "Eylül",
+  "Ekim",
+  "Kasım",
+  "Aralık",
+];
+
+const formatDateHeader = (d: Date) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const targetDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  if (targetDate.getTime() === today.getTime()) return "Bugün";
+  if (targetDate.getTime() === yesterday.getTime()) return "Dün";
+
+  let yearStr =
+    d.getFullYear() !== now.getFullYear() ? ` ${d.getFullYear()}` : "";
+  return `${d.getDate()} ${monthNames[d.getMonth()]}${yearStr}`;
+};
+
 export default function ChatRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,6 +76,26 @@ export default function ChatRoomScreen() {
   const [loading, setLoading] = useState(true);
 
   const currentUserId = auth.currentUser?.uid;
+
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+
+  const showToast = () => {
+    setToastVisible(true);
+    Animated.sequence([
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1500),
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setToastVisible(false));
+  };
 
   // Sohbet bilgilerini ve karşı tarafın profilini çek
   useEffect(() => {
@@ -118,6 +172,70 @@ export default function ChatRoomScreen() {
     return () => unsubscribe();
   }, [id, currentUserId]);
 
+  const deleteMessage = async (messageId: string) => {
+    if (!id) return;
+    try {
+      await deleteDoc(doc(db, "chats", id, "messages", messageId));
+    } catch (error) {
+      console.error("Mesaj silinirken hata:", error);
+      if (Platform.OS !== "web") {
+        Alert.alert("Hata", "Mesaj silinemedi.");
+      }
+    }
+  };
+
+  const handleLongPress = async (item: Message, isMe: boolean) => {
+    if (Platform.OS === "web") {
+      const action = window.prompt(
+        `İşlem seçin:\n1 - Kopyala${isMe ? "\n2 - Sil" : ""}`,
+        "1",
+      );
+      if (action === "1") {
+        await Clipboard.setStringAsync(item.text);
+        showToast();
+      } else if (action === "2" && isMe) {
+        const confirm = window.confirm(
+          "Mesajı silmek istediğinize emin misiniz?",
+        );
+        if (confirm) deleteMessage(item.id);
+      }
+    } else {
+      const options: any[] = [
+        {
+          text: "Kopyala",
+          onPress: async () => {
+            await Clipboard.setStringAsync(item.text);
+            showToast();
+          },
+        },
+      ];
+
+      if (isMe) {
+        options.push({
+          text: "Sil",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Mesajı Sil",
+              "Bu mesajı silmek istediğinize emin misiniz?",
+              [
+                { text: "İptal", style: "cancel" },
+                {
+                  text: "Sil",
+                  style: "destructive",
+                  onPress: () => deleteMessage(item.id),
+                },
+              ],
+            );
+          },
+        });
+      }
+
+      options.push({ text: "İptal", style: "cancel" });
+      Alert.alert("Mesaj Seçenekleri", undefined, options);
+    }
+  };
+
   const handleSend = async () => {
     if (!inputText.trim() || !id || !currentUserId) return;
 
@@ -163,45 +281,77 @@ export default function ChatRoomScreen() {
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.senderId === currentUserId;
 
-    // Optimistic UI için createdAt henüz yoksa saati gizle
-    const timeString = item.createdAt
-      ? item.createdAt
-          .toDate()
-          .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      : "...";
+    // Saatleri manuel formatlayarak tarayıcının AM/PM zorlamasını engelliyoruz
+    let timeString = "...";
+    let showDateHeader = false;
+    let dateHeaderText = "";
+
+    if (item.createdAt) {
+      const currentMsgDate = item.createdAt.toDate();
+      const hours = currentMsgDate.getHours().toString().padStart(2, "0");
+      const minutes = currentMsgDate.getMinutes().toString().padStart(2, "0");
+      timeString = `${hours}:${minutes}`;
+
+      // Liste ters (inverted) çalıştığı için önceki mesaj index + 1 olur
+      const olderMsg = messages[index + 1];
+      if (!olderMsg || !olderMsg.createdAt) {
+        showDateHeader = true;
+      } else {
+        const olderMsgDate = olderMsg.createdAt.toDate();
+        const isSameDay =
+          currentMsgDate.getFullYear() === olderMsgDate.getFullYear() &&
+          currentMsgDate.getMonth() === olderMsgDate.getMonth() &&
+          currentMsgDate.getDate() === olderMsgDate.getDate();
+
+        showDateHeader = !isSameDay;
+      }
+
+      if (showDateHeader) {
+        dateHeaderText = formatDateHeader(currentMsgDate);
+      }
+    }
 
     return (
-      <View
-        style={[
-          styles.messageWrapper,
-          isMe ? styles.messageWrapperMe : styles.messageWrapperOther,
-        ]}
-      >
+      <View>
+        {showDateHeader && (
+          <View style={styles.dateHeaderContainer}>
+            <Text style={styles.dateHeaderText}>{dateHeaderText}</Text>
+          </View>
+        )}
         <View
           style={[
-            styles.messageBubble,
-            isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
+            styles.messageWrapper,
+            isMe ? styles.messageWrapperMe : styles.messageWrapperOther,
           ]}
         >
-          <Text
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onLongPress={() => handleLongPress(item, isMe)}
             style={[
-              styles.messageText,
-              isMe ? styles.messageTextMe : styles.messageTextOther,
+              styles.messageBubble,
+              isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
             ]}
           >
-            {item.text}
-          </Text>
-          <Text
-            style={[
-              styles.messageTime,
-              isMe ? styles.messageTimeMe : styles.messageTimeOther,
-            ]}
-          >
-            {timeString}
-          </Text>
+            <Text
+              style={[
+                styles.messageText,
+                isMe ? styles.messageTextMe : styles.messageTextOther,
+              ]}
+            >
+              {item.text}
+            </Text>
+            <Text
+              style={[
+                styles.messageTime,
+                isMe ? styles.messageTimeMe : styles.messageTimeOther,
+              ]}
+            >
+              {timeString}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -282,6 +432,20 @@ export default function ChatRoomScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        {toastVisible && (
+          <Animated.View
+            style={[styles.toastContainer, { opacity: toastAnim }]}
+          >
+            <Ionicons
+              name="copy-outline"
+              size={20}
+              color="#fff"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.toastText}>Mesaj kopyalandı!</Text>
+          </Animated.View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -323,6 +487,20 @@ const styles = StyleSheet.create({
   messageTime: { fontSize: 10, marginTop: 4, alignSelf: "flex-end" },
   messageTimeMe: { color: "rgba(255,255,255,0.7)" },
   messageTimeOther: { color: "#aaa" },
+  dateHeaderContainer: {
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  dateHeaderText: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    color: "#ddd",
+    fontSize: 12,
+    fontWeight: "bold",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
   inputContainer: {
     flexDirection: "row",
     padding: 10,
@@ -349,5 +527,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 10,
+  },
+  toastContainer: {
+    position: "absolute",
+    top: 80,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    zIndex: 1000,
+  },
+  toastText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
   },
 });
