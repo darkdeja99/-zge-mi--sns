@@ -38,7 +38,6 @@ export default function SignUp() {
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
 
-  // Animasyon değerini tutan referans
   const shakeAnimation = useRef(new Animated.Value(0)).current;
 
   const triggerShake = () => {
@@ -87,11 +86,10 @@ export default function SignUp() {
       );
       const user = userCredential.user;
 
-      // Firebase Storage'dan aldığınız sabit fotoğraf URL'sini buraya ekleyin
+      // default avatar URL
       const DEFAULT_PHOTO_URL =
         "https://firebasestorage.googleapis.com/v0/b/ozgecmis-sns.firebasestorage.app/o/profile_pictures%2Fdefault-avatar.png?alt=media&token=cee05d39-fb65-40e7-8702-5bfdbbfac7de";
 
-      // Firebase Auth profilini güncelle
       await updateProfile(user, {
         displayName: `${name} ${surname}`,
         photoURL: DEFAULT_PHOTO_URL,
@@ -103,7 +101,7 @@ export default function SignUp() {
       } else if (birthYear) {
         finalBirthDate = birthYear;
       }
-      // Kullanıcı verilerini Firestore'a kaydet
+
       await setDoc(doc(db, "users", user.uid), {
         name: name,
         surname: surname,

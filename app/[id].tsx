@@ -31,7 +31,7 @@ import ReadMoreText from "../components/ReadMoreText";
 import { db } from "../firebaseConfig";
 import { Experience, ResumeData, UserProfileData } from "../types/profile";
 
-// Uygulama kök adresi (Çevre değişkeninden alır, yoksa varsayılanı kullanır)
+// uygulamanın kök adresi
 const APP_BASE_URL =
   process.env.EXPO_PUBLIC_BASE_URL || "https://ozgecmis-sns.web.app";
 
@@ -99,7 +99,6 @@ export default function UserProfile() {
           const data = userDocSnap.data();
           setProfile(data as UserProfileData);
 
-          // Eğer kullanıcıda özgeçmiş bilgilerinden herhangi biri varsa resume state'ini doldur
           const hasResumeData =
             data.summary !== undefined ||
             data.skills !== undefined ||

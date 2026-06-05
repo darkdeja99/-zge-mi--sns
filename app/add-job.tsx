@@ -282,7 +282,7 @@ export default function AddJob() {
   };
 
   const handleSave = async () => {
-    // Form doğrulama (Eksik alan var mı kontrolü)
+    // Form doğrulama (eksik alan kontrolü)
     if (
       !title.trim() ||
       !company.trim() ||
@@ -323,7 +323,7 @@ export default function AddJob() {
         return;
       }
 
-      // Firebase Firestore'a veriyi kaydetme işlemi
+      // Firestore veri kaydetme
       await addDoc(collection(db, "jobs"), {
         title: title.trim(),
         company: company.trim(),
@@ -334,9 +334,9 @@ export default function AddJob() {
         salaryRange: { min: minSalary.trim(), max: maxSalary.trim() },
         skills,
         description: description.trim(),
-        employerId: currentUser.uid, // İlanı kimin verdiğini tutuyoruz
-        contactEmail: contactEmail.trim(), // İletişim e-postasını kaydediyoruz
-        createdAt: serverTimestamp(), // Sunucu saati ile kayıt anı
+        employerId: currentUser.uid,
+        contactEmail: contactEmail.trim(),
+        createdAt: serverTimestamp(),
       });
 
       setModalConfig({

@@ -3,7 +3,7 @@ import { Picker } from "@react-native-picker/picker";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, useNavigation } from "expo-router";
-import { updateProfile, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   deleteObject,
@@ -154,12 +154,10 @@ export default function EditProfile() {
           imageUri: user.photoURL || null,
         };
 
-        // Set image from auth profile
         if (user.photoURL) {
           setImageUri(user.photoURL);
         }
 
-        // Set name/surname from Firestore
         const userDocRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists()) {
@@ -219,15 +217,14 @@ export default function EditProfile() {
         imageUri !== initialState.imageUri;
 
       if (!hasUnsavedChanges) {
-        return; // Değişiklik yoksa çıkışa izin ver
+        return;
       }
 
-      // Çıkış işlemini geçici olarak durdur
       e.preventDefault();
 
       if (Platform.OS === "web") {
         const confirmed = window.confirm(
-          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?"
+          "Yaptığınız değişiklikleri henüz kaydetmediniz. Çıkmak istediğinize emin misiniz?",
         );
         if (confirmed) {
           navigation.dispatch(e.data.action);
@@ -263,7 +260,6 @@ export default function EditProfile() {
 
   const pickImage = async () => {
     if (Platform.OS === "web") {
-      // Web tarayıcılarında varsayılan olarak galeri (dosya seçici) açılır
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
@@ -341,7 +337,6 @@ export default function EditProfile() {
     let newPhotoURL = user.photoURL;
 
     try {
-      // 1. If image was changed, upload it to Storage
       if (imageUri && imageUri !== user.photoURL) {
         const blob: any = await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
@@ -363,7 +358,6 @@ export default function EditProfile() {
         await uploadBytes(storageRef, blob);
         newPhotoURL = await getDownloadURL(storageRef);
       } else if (!imageUri && user.photoURL) {
-        // 1.1 Eğer kullanıcı fotoğrafını kaldırdıysa Storage'dan da sil
         newPhotoURL = null;
         try {
           const storageRef = ref(storage, `profile_pictures/${user.uid}`);
@@ -373,7 +367,6 @@ export default function EditProfile() {
         }
       }
 
-      // 2. Update Firebase Auth profile
       await updateProfile(user, {
         displayName: `${name} ${surname}`,
         photoURL: newPhotoURL,
@@ -383,10 +376,9 @@ export default function EditProfile() {
       if (birthDay && birthMonth && birthYear) {
         finalBirthDate = `${birthDay}/${birthMonth}/${birthYear}`;
       } else if (birthYear) {
-        finalBirthDate = birthYear; // Fallback
+        finalBirthDate = birthYear;
       }
 
-      // 3. Update Firestore document
       const userDocRef = doc(db, "users", user.uid);
       await setDoc(
         userDocRef,
@@ -397,13 +389,11 @@ export default function EditProfile() {
           gender: gender,
           birthDate: finalBirthDate,
           phoneNumber: phoneNumber,
-          photoURL: newPhotoURL, // Also save URL to firestore
+          photoURL: newPhotoURL,
         },
         { merge: true },
       );
 
-      // Kaydetme başarılı olduğunda initialState'i güncelliyoruz
-      // Bu sayede çıkış yaparken uyarı çıkmasını önlüyoruz.
       setInitialState({
         name,
         surname,

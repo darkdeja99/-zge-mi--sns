@@ -28,7 +28,6 @@ import { auth, db } from "../../firebaseConfig";
 import { formatTimeAgo } from "../../utils/formatTimeAgo";
 import { Job } from "./jobs";
 
-// ID dizilerini 30'luk gruplara (batch/chunk) bölmek için yardımcı fonksiyon
 const chunkArray = <T,>(arr: T[], size: number): T[][] => {
   const chunks = [];
   for (let i = 0; i < arr.length; i += size) {
@@ -37,7 +36,6 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
   return chunks;
 };
 
-// React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
 const SavedJobCardItem = memo(
   ({
     item,
@@ -143,7 +141,7 @@ export default function SavedJobs() {
       return;
     }
 
-    // ID'leri 30'arlı gruplara bölüyoruz
+    // ID'leri 30 30 gruplara bölündü
     const chunks = chunkArray(savedJobIds, 30);
     const unsubscribes: (() => void)[] = [];
     const allJobsMap = new Map<string, Job>();
@@ -205,7 +203,6 @@ export default function SavedJobs() {
     return filtered;
   }, [searchQuery, jobs]);
 
-  // Arama metni değiştiğinde gösterilecek eleman sayısını ilk sayfaya (10) sıfırla
   useEffect(() => {
     setDisplayedCount(10);
   }, [searchQuery]);
@@ -296,7 +293,7 @@ export default function SavedJobs() {
           windowSize={5}
           updateCellsBatchingPeriod={50}
           getItemLayout={(_, index) => ({
-            length: 140, // Ortalama ilan kartı yüksekliği
+            length: 140,
             offset: 140 * index,
             index,
           })}

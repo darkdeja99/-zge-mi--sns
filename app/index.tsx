@@ -32,7 +32,6 @@ export default function Index() {
         router.replace("/(tabs)/home");
       } else {
         setLoading(false);
-        // Kullanıcı giriş yapmamışsa karşılama animasyonunu başlat
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
@@ -47,7 +46,7 @@ export default function Index() {
         ]).start();
       }
     });
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, [fadeAnim, translateYAnim]);
 
   if (loading) {

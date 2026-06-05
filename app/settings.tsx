@@ -53,11 +53,9 @@ export default function Settings() {
       try {
         const user = auth.currentUser;
         if (user && user.email) {
-          // 1. Kullanıcıyı güvenlik gereği yeniden doğruluyoruz
           const credential = EmailAuthProvider.credential(user.email, password);
           await reauthenticateWithCredential(user, credential);
 
-          // 2. Kullanıcının yayınladığı tüm iş ilanlarını bulup siliyoruz
           const jobsRef = collection(db, "jobs");
           const q = query(jobsRef, where("employerId", "==", user.uid));
           const querySnapshot = await getDocs(q);
@@ -66,13 +64,11 @@ export default function Settings() {
           );
           await Promise.all(deleteJobPromises);
 
-          // 3. Firebase Storage'dan kullanıcının profil fotoğrafını siliyoruz
           if (user.photoURL) {
             const photoRef = ref(storage, `profile_pictures/${user.uid}`);
-            await deleteObject(photoRef).catch(() => {}); // Fotoğraf bulunamazsa veya hata olursa yoksay
+            await deleteObject(photoRef).catch(() => {});
           }
 
-          // 4. Log kaydı oluşturuyoruz (Kullanıcı kendi sildiğinde admin'e bildirmek için)
           try {
             const userDocSnap = await getDoc(doc(db, "users", user.uid));
             let userName = user.displayName || "Bilinmiyor";
@@ -96,10 +92,8 @@ export default function Settings() {
             console.error("Log kaydı alınamadı:", logError);
           }
 
-          // 5. Firestore'dan kullanıcı profil belgesini (doc) siliyoruz
           await deleteDoc(doc(db, "users", user.uid));
 
-          // 6. Firebase Auth üzerinden kullanıcı hesabını siliyoruz
           await deleteUser(user);
 
           if (Platform.OS === "web") {

@@ -12,7 +12,7 @@ export interface EducationInfo {
   startDate: string;
   endDate: string;
   gpa: string;
-  degree?: string; // Eski özgeçmiş verilerindeki uyumluluk için eklendi
+  degree?: string; // ilk özgeçmiş verilerine uyumluluk için eklendi
 }
 
 export interface Language {

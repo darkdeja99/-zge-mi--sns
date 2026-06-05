@@ -70,7 +70,6 @@ export default function JobDetailsScreen() {
           const jobData = { id: docSnap.id, ...docSnap.data() } as JobDetails;
           setJob(jobData);
 
-          // Eğer ilanda e-posta yoksa (eski eklenen ilanlar), users koleksiyonundan çekmeyi dene
           if (!jobData.contactEmail && jobData.employerId) {
             const userRef = doc(db, "users", jobData.employerId);
             const userSnap = await getDoc(userRef);
@@ -174,7 +173,7 @@ export default function JobDetailsScreen() {
           "E-posta uygulamanız açıldı. Lütfen başvurunuzu e-posta üzerinden göndermeyi unutmayın!",
         );
 
-        // E-posta penceresi başarıyla açıldığında başvuruyu veritabanına kaydet
+        // başvuruyu veritabanına kaydet
         if (auth.currentUser && id) {
           const currentUserUid = auth.currentUser.uid;
           try {
@@ -257,7 +256,7 @@ export default function JobDetailsScreen() {
 
     try {
       const chatsRef = collection(db, "chats");
-      // Mevcut kullanıcının dahil olduğu sohbetleri ara
+      // mevcut kullanıcının dahil olduğu sohbetleri arama
       const q = query(
         chatsRef,
         where("participants", "array-contains", currentUserId),
@@ -267,7 +266,6 @@ export default function JobDetailsScreen() {
       let existingChatId = null;
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        // Bulunan sohbetin katılımcıları arasında işveren de var mı?
         if (data.participants.includes(targetUserId)) {
           existingChatId = docSnap.id;
         }

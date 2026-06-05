@@ -97,7 +97,6 @@ export default function ChatRoomScreen() {
     ]).start(() => setToastVisible(false));
   };
 
-  // Sohbet bilgilerini ve karşı tarafın profilini çek
   useEffect(() => {
     if (!id || !currentUserId) return;
     const fetchChatDetails = async () => {
@@ -118,12 +117,10 @@ export default function ChatRoomScreen() {
     fetchChatDetails();
   }, [id, currentUserId]);
 
-  // Mesajları gerçek zamanlı dinle
   useEffect(() => {
     if (!id) return;
 
     const messagesRef = collection(db, "chats", id, "messages");
-    // En yeni mesaj en altta (inverted list) görünmesi için "desc" kullanıyoruz
     const q = query(messagesRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(
@@ -146,7 +143,6 @@ export default function ChatRoomScreen() {
     return () => unsubscribe();
   }, [id]);
 
-  // Karşı tarafın mesajını okuduysak durumu güncelle
   useEffect(() => {
     if (!id || !currentUserId) return;
     const chatRef = doc(db, "chats", id);
@@ -240,17 +236,15 @@ export default function ChatRoomScreen() {
     if (!inputText.trim() || !id || !currentUserId) return;
 
     const textToSend = inputText.trim();
-    setInputText(""); // UI'ı anında temizle
+    setInputText("");
 
     try {
-      // Mesajı alt koleksiyona ekle
       await addDoc(collection(db, "chats", id, "messages"), {
         text: textToSend,
         senderId: currentUserId,
         createdAt: serverTimestamp(),
       });
 
-      // Ana sohbet belgesindeki lastMessage bilgisini güncelle
       await updateDoc(doc(db, "chats", id), {
         lastMessage: textToSend,
         lastMessageTime: serverTimestamp(),
@@ -258,7 +252,6 @@ export default function ChatRoomScreen() {
         lastMessageRead: false,
       });
 
-      // Karşı tarafın Push Token'ı varsa ve okumadıysa bildirim gönder
       if (otherUser && otherUser.pushToken) {
         const messagePayload = {
           to: otherUser.pushToken,
@@ -284,7 +277,6 @@ export default function ChatRoomScreen() {
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.senderId === currentUserId;
 
-    // Saatleri manuel formatlayarak tarayıcının AM/PM zorlamasını engelliyoruz
     let timeString = "...";
     let showDateHeader = false;
     let dateHeaderText = "";
@@ -295,7 +287,6 @@ export default function ChatRoomScreen() {
       const minutes = currentMsgDate.getMinutes().toString().padStart(2, "0");
       timeString = `${hours}:${minutes}`;
 
-      // Liste ters (inverted) çalıştığı için önceki mesaj index + 1 olur
       const olderMsg = messages[index + 1];
       if (!olderMsg || !olderMsg.createdAt) {
         showDateHeader = true;
@@ -402,7 +393,7 @@ export default function ChatRoomScreen() {
               data={messages}
               keyExtractor={(item) => item.id}
               renderItem={renderMessage}
-              inverted // En alttan başlayıp yukarı doğru sıralanmasını sağlar
+              inverted
               contentContainerStyle={styles.messagesList}
               showsVerticalScrollIndicator={false}
             />

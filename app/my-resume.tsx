@@ -536,20 +536,17 @@ const years = Array.from({ length: 60 }, (_, i) =>
 );
 
 const formatGPA = (text: string) => {
-  let formatted = text.replace(/[^0-9.]/g, ""); // Sadece sayı ve noktaya izin ver
+  let formatted = text.replace(/[^0-9.]/g, "");
   const parts = formatted.split(".");
   if (parts.length > 2) {
-    formatted = parts[0] + "." + parts.slice(1).join(""); // Birden fazla noktayı engelle
+    formatted = parts[0] + "." + parts.slice(1).join("");
   }
   return formatted;
 };
 
 const formatYear = (text: string) => {
-  return text.replace(/[^0-9]/g, "").slice(0, 4); // Sadece 4 haneli rakama izin ver
+  return text.replace(/[^0-9]/g, "").slice(0, 4);
 };
-
-// Firebase'den gelen eksik/boş değerler ile UI state üzerindeki boş string/array'leri
-// eşit kabul etmek ve key sıralamasından etkilenmemek için temizleme fonksiyonu
 const sanitizeForComparison = (obj: any): any => {
   if (Array.isArray(obj)) {
     return obj.map(sanitizeForComparison);
@@ -562,7 +559,7 @@ const sanitizeForComparison = (obj: any): any => {
         const val = obj[key];
         if (val !== undefined && val !== null && val !== "") {
           if (Array.isArray(val) && val.length === 0) {
-            return; // Boş diziyi atla
+            return;
           }
           newObj[key] = sanitizeForComparison(val);
         }
@@ -578,11 +575,11 @@ export default function MyResume() {
   const [selectedHeadline, setSelectedHeadline] = useState("");
   const [summary, setSummary] = useState("");
   const [skills, setSkills] = useState<any[]>([]);
-  const [currentSkill, setCurrentSkill] = useState(""); // Input için state
-  const [currentSkillLevel, setCurrentSkillLevel] = useState(""); // Yetenek seviyesi
-  const [selectedLanguage, setSelectedLanguage] = useState(""); // Dil pickeri için state
-  const [currentLanguage, setCurrentLanguage] = useState(""); // Dil inputu için state
-  const [currentLanguageLevel, setCurrentLanguageLevel] = useState(""); // Dil seviyesi için state
+  const [currentSkill, setCurrentSkill] = useState("");
+  const [currentSkillLevel, setCurrentSkillLevel] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("");
+  const [currentLanguage, setCurrentLanguage] = useState("");
+  const [currentLanguageLevel, setCurrentLanguageLevel] = useState("");
   const [selectedCertificate, setSelectedCertificate] = useState("");
   const [selectedUniPicker, setSelectedUniPicker] = useState("");
   const [selectedUniFieldPicker, setSelectedUniFieldPicker] = useState("");
@@ -677,7 +674,6 @@ export default function MyResume() {
             }
           }
 
-          // Eski eğitim dizisi varsa ve yeni yapı boşsa içeriği taşı (Geriye Dönük Uyumluluk)
           if (
             !userData.highSchool &&
             !userData.university &&
@@ -708,7 +704,6 @@ export default function MyResume() {
             }
           }
 
-          // Eğer kaydedilmiş üniversite listede varsa, picker onu seçsin
           if (initialVals.university.school) {
             if (universities.includes(initialVals.university.school)) {
               setSelectedUniPicker(initialVals.university.school);
@@ -717,7 +712,6 @@ export default function MyResume() {
             }
           }
 
-          // Eğer kaydedilmiş bölüm listede varsa, picker onu seçsin
           if (initialVals.university.fieldOfStudy) {
             if (
               universityDepartments.includes(
@@ -775,10 +769,9 @@ export default function MyResume() {
         JSON.stringify(sanitizeForComparison(currentState));
 
       if (!hasUnsavedChanges) {
-        return; // Değişiklik yoksa çıkışa izin ver
+        return;
       }
 
-      // Çıkış işlemini geçici olarak durdur
       e.preventDefault();
 
       if (Platform.OS === "web") {
@@ -819,22 +812,22 @@ export default function MyResume() {
     projects,
   ]);
 
-  // Bulunulan adımın zorunlu alanlarının doldurulup doldurulmadığını kontrol eder
+  // zorunlu alan kontrolü için fonksiyon
   const isStepValid = () => {
     switch (currentStep) {
-      case 0: // Temel Bilgiler: Ünvan seçimi zorunlu
+      case 0:
         if (!selectedHeadline) return false;
         if (selectedHeadline === "Diğer" && !headline.trim()) return false;
         return true;
-      case 1: // Eğitim Bilgileri: İsteğe bağlı
+      case 1:
         return true;
-      case 2: // İş Deneyimi: Eklenmişse Pozisyon ve Şirket zorunlu
+      case 2:
         return experiences.every(
           (exp) => exp.title.trim() !== "" && exp.company.trim() !== "",
         );
-      case 3: // Yetenekler ve Diller: İsteğe bağlı
+      case 3:
         return true;
-      case 4: // Sertifikalar ve Projeler: Proje eklenmişse Adı zorunlu
+      case 4:
         return projects.every((proj) => proj.name.trim() !== "");
       default:
         return true;
@@ -997,7 +990,6 @@ export default function MyResume() {
     const userDocRef = doc(db, "users", user.uid);
 
     try {
-      // Deneyim ve eğitimleri tarihe göre yeniden eskiye (azalan) sıralama fonksiyonu
       const sortByDateDesc = (a: any, b: any) => {
         const dateA = (a.endDate || a.startDate || "").trim();
         const dateB = (b.endDate || b.startDate || "").trim();
@@ -1029,8 +1021,6 @@ export default function MyResume() {
       };
 
       await setDoc(userDocRef, dataToSave, { merge: true });
-
-      // Kaydetme başarılı olduğunda initialState'i güncelleyerek uyarı çıkmasını engelliyoruz
       setInitialState({
         headline,
         summary,
@@ -1068,7 +1058,6 @@ export default function MyResume() {
       }
     }
 
-    // Varsayılan öneriler
     if (suggestions.length === 0) {
       suggestions = [
         "İletişim",
@@ -1079,7 +1068,7 @@ export default function MyResume() {
       ];
     }
 
-    suggestions = Array.from(new Set(suggestions)); // Tekilleştir
+    suggestions = Array.from(new Set(suggestions));
     const currentSkills = skills.map((s: any) =>
       (typeof s === "string" ? s : s.name).toLowerCase(),
     );
@@ -1094,7 +1083,7 @@ export default function MyResume() {
     );
     if (!currentSkills.includes(skillName.toLowerCase())) {
       setCurrentSkill(skillName);
-      setFocusedInput("currentSkillLevel"); // Odak seviye seçiciye gitsin
+      setFocusedInput("currentSkillLevel");
     }
   };
 
@@ -1136,7 +1125,7 @@ export default function MyResume() {
 
   const renderStepContent = () => {
     switch (currentStep) {
-      case 0: // Ünvan ve Hakkında
+      case 0:
         return (
           <>
             <Text style={styles.stepTitle}>Ünvan</Text>
@@ -1233,7 +1222,7 @@ export default function MyResume() {
           </>
         );
 
-      case 1: // Eğitim Bilgileri
+      case 1:
         return (
           <>
             <Text style={styles.stepTitle}>Lise</Text>
@@ -1630,7 +1619,7 @@ export default function MyResume() {
           </>
         );
 
-      case 2: // İş Deneyimi
+      case 2:
         return (
           <>
             <Text style={styles.stepTitle}>İş Deneyimi</Text>
@@ -1671,7 +1660,6 @@ export default function MyResume() {
                       }
                       onValueChange={(val) => {
                         if (val === "Diğer") {
-                          // Metin kutusunu açık tutmak için boşluk karakteri kullanıyoruz
                           handleExperienceChange(index, "title", " ");
                         } else {
                           handleExperienceChange(index, "title", val);
@@ -1885,7 +1873,7 @@ export default function MyResume() {
           </>
         );
 
-      case 3: // Yetenekler ve Diller
+      case 3:
         return (
           <>
             <Text style={styles.stepTitle}>Yetenekler</Text>
@@ -2146,7 +2134,7 @@ export default function MyResume() {
           </>
         );
 
-      case 4: // Sertifikalar ve Projeler
+      case 4:
         return (
           <>
             <Text style={styles.stepTitle}>Sertifikalar ve Kurslar</Text>

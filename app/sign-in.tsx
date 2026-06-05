@@ -3,15 +3,15 @@ import { Link, router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Animated,
+  Dimensions,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,7 +25,6 @@ export default function SignIn() {
 
   const passwordRef = useRef<TextInput>(null);
 
-  // Animasyon değerini tutan referans
   const shakeAnimation = useRef(new Animated.Value(0)).current;
 
   const triggerShake = () => {
@@ -56,9 +55,9 @@ export default function SignIn() {
   const handleSignIn = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.replace("/(tabs)/home"); // Ana sayfaya yönlendir
+      router.replace("/(tabs)/home");
     } catch (error: any) {
-      triggerShake(); // Hata alındığında sallanma efektini başlat
+      triggerShake();
       Alert.alert("Giriş Hatası", error.message);
     }
   };

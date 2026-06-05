@@ -47,7 +47,6 @@ export interface Job {
   applicants?: string[];
 }
 
-// React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
 const JobCardItem = memo(
   ({
     item,
@@ -275,7 +274,7 @@ export default function Jobs() {
 
   useEffect(() => {
     const jobsRef = collection(db, "jobs");
-    // İlanları tarihe göre en yeniden en eskiye doğru sırala
+    // ilanları tarihe göre en yeniden en eskiye doğru sırala
     const q = query(jobsRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(
@@ -300,7 +299,6 @@ export default function Jobs() {
   }, []);
 
   const filteredJobs = useMemo(() => {
-    // Önce seçili sekmeye (Tüm İlanlar veya Başvurularım) göre filtrele
     let baseJobs =
       activeTab === "applied"
         ? jobs.filter((j) => appliedJobIds.includes(j.id))
@@ -322,7 +320,7 @@ export default function Jobs() {
     }
   }, [searchQuery, jobs, activeTab, appliedJobIds]);
 
-  // Filtreler (Arama veya Sekme) değiştiğinde gösterilecek eleman sayısını sıfırla
+  // filtreler değiştiğinde gösterilecek eleman sayısını sıfırla
   useEffect(() => {
     setDisplayedCount(10);
   }, [searchQuery, activeTab]);
@@ -624,7 +622,7 @@ export default function Jobs() {
           windowSize={5}
           updateCellsBatchingPeriod={50}
           getItemLayout={(_, index) => ({
-            length: 160, // Ortalama ilan kartı yüksekliği (Yetenek ve maaş için artırıldı)
+            length: 160,
             offset: 160 * index,
             index,
           })}

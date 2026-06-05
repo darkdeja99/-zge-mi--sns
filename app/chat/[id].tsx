@@ -4,30 +4,30 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    updateDoc,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomLoader from "../../components/CustomLoader";
@@ -54,7 +54,7 @@ export default function ChatRoomScreen() {
 
   const currentUserId = auth.currentUser?.uid;
 
-  // Sohbet bilgilerini ve karşı tarafın profilini çek
+  // sohbet bilgilerini ve karşı tarafın profilini çek
   useEffect(() => {
     if (!id || !currentUserId) return;
     const fetchChatDetails = async () => {
@@ -75,12 +75,12 @@ export default function ChatRoomScreen() {
     fetchChatDetails();
   }, [id, currentUserId]);
 
-  // Mesajları gerçek zamanlı dinle
+  // mesajları gerçek zamanlı dinle
   useEffect(() => {
     if (!id) return;
 
     const messagesRef = collection(db, "chats", id, "messages");
-    // En yeni mesaj en altta (inverted list) görünmesi için "desc" kullanıyoruz
+    // en yeni mesaj en altta (inverted list) görünmesi için "desc" kullanıyoruz
     const q = query(messagesRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -99,17 +99,17 @@ export default function ChatRoomScreen() {
     if (!inputText.trim() || !id || !currentUserId) return;
 
     const textToSend = inputText.trim();
-    setInputText(""); // UI'ı anında temizle
+    setInputText(""); // UI ı anında temizle
 
     try {
-      // Mesajı alt koleksiyona ekle
+      // mesajı alt koleksiyona ekle
       await addDoc(collection(db, "chats", id, "messages"), {
         text: textToSend,
         senderId: currentUserId,
         createdAt: serverTimestamp(),
       });
 
-      // Ana sohbet belgesindeki lastMessage bilgisini güncelle
+      // ana sohbet belgesindeki lastMessage bilgisini güncelle
       await updateDoc(doc(db, "chats", id), {
         lastMessage: textToSend,
         lastMessageTime: serverTimestamp(),
@@ -179,7 +179,6 @@ export default function ChatRoomScreen() {
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.senderId === currentUserId;
 
-    // Optimistic UI için createdAt henüz yoksa saati gizle
     const timeString = item.createdAt
       ? item.createdAt
           .toDate()
@@ -278,11 +277,10 @@ export default function ChatRoomScreen() {
               data={messages}
               keyExtractor={(item) => item.id}
               renderItem={renderMessage}
-              inverted // En alttan başlayıp yukarı doğru sıralanmasını sağlar
+              inverted
               contentContainerStyle={styles.messagesList}
               showsVerticalScrollIndicator={false}
               onEndReached={() => {
-                // Sadece mevcut mesaj sayısı limite ulaştıysa limiti artır
                 if (messages.length >= messageLimit) {
                   setMessageLimit((prev) => prev + 20);
                 }

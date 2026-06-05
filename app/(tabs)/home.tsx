@@ -60,7 +60,7 @@ const calculateAge = (birthDateString: string | undefined) => {
     }
     return age;
   }
-  // Eğer önceki sürümdeki gibi sadece "Yıl" (örneğin 1995) verisi geldiyse
+  // eski format olan sadece yıl bilgisi varsa yaş hesabı
   if (parts.length === 1 && birthDateString.length === 4) {
     const year = parseInt(birthDateString, 10);
     const today = new Date();
@@ -69,7 +69,6 @@ const calculateAge = (birthDateString: string | undefined) => {
   return null;
 };
 
-// React.memo sayesinde listeye dokunulmadığı sürece item'lar tekrar render edilmez
 const UserCardItem = memo(({ item }: { item: UserData }) => (
   <Link href={`/${item.id}`} asChild>
     <TouchableOpacity style={styles.userCard}>
@@ -173,7 +172,6 @@ export default function Home() {
 
     const usersRef = collection(db, "users");
 
-    // Kullanıcıları tarihe göre sıralayarak ve queryLimit kadar sınırlandırarak sunucudan çekiyoruz
     const q = query(usersRef, orderBy("createdAt", "desc"), limit(queryLimit));
 
     const unsubscribe = onSnapshot(
@@ -181,13 +179,11 @@ export default function Home() {
       (querySnapshot) => {
         const usersList: UserData[] = [];
         querySnapshot.forEach((doc) => {
-          // Mevcut kullanıcıyı (kendimizi) sonuçlardan hariç tutuyoruz
           if (doc.id !== currentUser.uid) {
             usersList.push({ id: doc.id, ...doc.data() } as UserData);
           }
         });
 
-        // Kullanıcıları en yeni eklenen/güncellenenden eskiye doğru sırala
         usersList.sort((a, b) => {
           const timeA = a.createdAt?.seconds || a.updatedAt?.seconds || 0;
           const timeB = b.createdAt?.seconds || b.updatedAt?.seconds || 0;
@@ -198,7 +194,6 @@ export default function Home() {
         setLoading(false);
       },
       (error) => {
-        // Çıkış yaparken token silindiği için anlık yetki hatası vermesi normaldir, bunu yoksay
         if (error.code !== "permission-denied") {
           console.error("Kullanıcıları dinlerken hata: ", error);
         }
@@ -206,13 +201,13 @@ export default function Home() {
       },
     );
 
-    return () => unsubscribe(); // Cleanup listener on unmount
+    return () => unsubscribe();
   }, [currentUser, queryLimit]);
 
   const filteredUsers = useMemo(() => {
     let filtered = users;
 
-    // Metin araması (isim, konum, ünvan, yetenek)
+    //  arama kriterleri (isim, konum, ünvan, yetenek)
     if (searchQuery !== "") {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((user) => {
@@ -243,11 +238,10 @@ export default function Home() {
       });
     }
 
-    // Yetenek çipleri ile filtreleme (Çoklu Seçim)
     if (selectedSkillFilters.length > 0) {
       filtered = filtered.filter((user) => {
         if (!user.skills || user.skills.length === 0) return false;
-        // Kullanıcının, seçilen çip yeteneklerinden HEPSİNE sahip olup olmadığını kontrol et
+
         return selectedSkillFilters.every((selectedSkill) =>
           user.skills!.some((userSkill: any) => {
             const sName =
@@ -258,14 +252,14 @@ export default function Home() {
       });
     }
 
-    // Yaş aralığı araması
+    // yaş aralığı araması
     if (minAge !== "" || maxAge !== "") {
       const min = minAge !== "" ? parseInt(minAge, 10) : 0;
       const max = maxAge !== "" ? parseInt(maxAge, 10) : 150; // Varsayılan max yaş 150 ayarladık
 
       filtered = filtered.filter((user) => {
         const age = calculateAge(user.birthDate);
-        if (age === null) return false; // Kullanıcının doğum tarihi verisi yoksa yaş filtresine takılmaz
+        if (age === null) return false;
         return age >= min && age <= max;
       });
     }
@@ -273,23 +267,19 @@ export default function Home() {
     return filtered;
   }, [searchQuery, minAge, maxAge, users, searchType, selectedSkillFilters]);
 
-  // Filtreler değiştiğinde gösterilecek eleman sayısını ilk sayfaya (10) sıfırla
   useEffect(() => {
     setDisplayedCount(10);
   }, [searchQuery, minAge, maxAge, searchType, selectedSkillFilters]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // onSnapshot zaten gerçek zamanlı güncellemeler sağladığı için,
-    // burada sadece kullanıcı deneyimi için yenileme göstergesini
-    // kısa bir süre gösterip kapatıyoruz.
+
     setTimeout(() => {
       setRefreshing(false);
     }, 1000);
   }, []);
 
   const handleLoadMore = () => {
-    // Eğer ekranda gösterilen eleman sayısı, indirilen verilere yaklaştıysa sunucudan limiti artır
     if (displayedCount >= filteredUsers.length - 10) {
       setQueryLimit((prev) => prev + 20);
     }
@@ -555,9 +545,9 @@ export default function Home() {
           initialNumToRender={10}
           maxToRenderPerBatch={10}
           windowSize={5}
-          updateCellsBatchingPeriod={50} // Scroll yaparken hücrelerin oluşturulma gecikmesi
+          updateCellsBatchingPeriod={50}
           getItemLayout={(_, index) => ({
-            length: 110, // userCard yüksekliği ortalama 110px'dir (Yükseklik hesabı atlanarak büyük bir performans sağlanır)
+            length: 110,
             offset: 110 * index,
             index,
           })}
@@ -706,7 +696,7 @@ const styles = StyleSheet.create({
   },
   filterChipsContainer: {
     marginTop: 15,
-    marginHorizontal: -20, // Kenarlara kadar taşması için
+    marginHorizontal: -20,
     paddingLeft: 20,
   },
   filterChip: {

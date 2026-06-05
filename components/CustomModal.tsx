@@ -27,17 +27,16 @@ export default function CustomModal({
   onCancel,
   children,
 }: CustomModalProps) {
-  // Modal tipine göre ikon ve renk yapılandırması
   const getIconConfig = () => {
     switch (type) {
       case "success":
-        return { name: "checkmark-circle", color: "#28a745" }; // Yeşil
+        return { name: "checkmark-circle", color: "#28a745" };
       case "error":
-        return { name: "close-circle", color: "#d9534f" }; // Kırmızı
+        return { name: "close-circle", color: "#d9534f" };
       case "warning":
-        return { name: "warning", color: "#f0ad4e" }; // Sarı
+        return { name: "warning", color: "#f0ad4e" };
       default:
-        return { name: "information-circle", color: "#4DA8DA" }; // Mavi
+        return { name: "information-circle", color: "#4DA8DA" };
     }
   };
 

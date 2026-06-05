@@ -10,7 +10,7 @@ if (Platform.OS === "web") {
   ]);
 }
 
-// Sadece web'de çalışan ve sekme odaktan çıkınca ekranı DOM'dan temizleyen özel kapsayıcı
+// sadece webde çalışan ve sekme odaktan çıkınca ekranı domdan kaldıran bir wrapper component
 function WebUnmountWrapper({ children }: { children: React.ReactNode }) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -36,20 +36,20 @@ export default function TabLayout() {
           )
         }
         screenOptions={{
-          headerShown: false, // Hides the top header
-          sceneStyle: { backgroundColor: "#0f2027" }, // Beyaz parlama sorununu kökten çözer
-          tabBarActiveTintColor: "#4DA8DA", // The color of the active tab
-          tabBarInactiveTintColor: "#888", // The color of inactive tabs
+          headerShown: false,
+          sceneStyle: { backgroundColor: "#0f2027" },
+          tabBarActiveTintColor: "#4DA8DA",
+          tabBarInactiveTintColor: "#888",
           tabBarStyle: {
-            backgroundColor: "#0f2027", // Alt menü arka planı tema ile aynı yapıldı
-            borderTopWidth: 1, // İçeriği alt menüden ayırmak için ince çizgi eklendi
+            backgroundColor: "#0f2027",
+            borderTopWidth: 1,
             borderTopColor: "rgba(255,255,255,0.05)",
           },
         }}
       >
-        {/* Each Tabs.Screen corresponds to a file in the (tabs) folder */}
+        {/* Sekmeler burada tanımlanacak */}
         <Tabs.Screen
-          name="home" // Points to app/(tabs)/home.tsx
+          name="home"
           options={{
             title: "Ana Sayfa",
             tabBarIcon: ({ color }) => (
@@ -58,7 +58,7 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="jobs" // Points to app/(tabs)/jobs.tsx
+          name="jobs"
           options={{
             title: "İlanlar",
             tabBarIcon: ({ color }) => (
@@ -67,7 +67,7 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="saved-jobs" // Points to app/(tabs)/saved-jobs.tsx
+          name="saved-jobs"
           options={{
             title: "Kaydedilenler",
             tabBarIcon: ({ color }) => (

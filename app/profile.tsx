@@ -62,7 +62,6 @@ export default function Profile() {
   useEffect(() => {
     const authUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      // If user logs out, stop loading
       if (!currentUser) setLoading(false);
     });
 
@@ -71,12 +70,10 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) {
-      // No user, clear profile and stop listening
       setUserProfile(null);
       return;
     }
 
-    // User is logged in, listen for their profile changes in Firestore
     const userDocRef = doc(db, "users", user.uid);
     const firestoreUnsubscribe = onSnapshot(
       userDocRef,
@@ -97,7 +94,6 @@ export default function Profile() {
       },
     );
 
-    // Cleanup Firestore listener on unmount or when user changes
     return () => firestoreUnsubscribe();
   }, [user]);
 
@@ -538,7 +534,7 @@ export default function Profile() {
                           userProfile.skills.map((skill: any, index) => {
                             const isObj = typeof skill === "object";
                             const skillName = isObj ? skill.name : skill;
-                            const skillLevel = isObj ? skill.level : "Orta"; // Varsayılan eski yapı
+                            const skillLevel = isObj ? skill.level : "Orta";
 
                             let levelPercent = "60%";
                             if (skillLevel === "Başlangıç")
@@ -957,7 +953,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#d9534f",
   },
   adminButton: {
-    backgroundColor: "#ff9800", // Admin butonunu belirgin yapmak için turuncu
+    backgroundColor: "#ff9800",
     marginTop: 20,
   },
   buttonText: {
